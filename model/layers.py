@@ -3,9 +3,10 @@ import torch.nn as nn
 
 
 class NormConvND(nn.Module):
-    """ Wrapper for N-dimensional convolution"""
+    """ Wrapper for N-dimensional convolution with """
 
-    def __init__(self, conv, c_in, c_out, kernel_size, stride, bias=True, norm=torch.utils.weight_norm, padding=0):
+    def __init__(self, conv, c_in, c_out, kernel_size, stride, bias=True,
+                 norm=torch.utils.weight_norm, activation_fun=None, padding=0):
         """
 
         :param conv: the convolution function, e.g. torch.nn.Conv2D
@@ -15,15 +16,18 @@ class NormConvND(nn.Module):
         :param stride: the stride
         :param bias: use bias?
         :param norm: the normalization function for the weights, e.g. torch.utils.weight_norm
+        :param activation_fun: the activation function, e.g. ReLU
         :param padding: the amount of zero padding
         """
         super(NormConvND, self).__init__()
         self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
                          stride=stride, bias=bias, padding=padding)
         self.norm = norm
+        self.activation_fun = activation_fun
 
     def forward(self, *input):
-        x = self.norm(self.conv(input))
+        x = self.norm(self.conv(input)) if self.norm is not None else self.conv(input)
+        x = self.activation_fun(x) if self.activation_fun is not None else x
         return x
 
 
