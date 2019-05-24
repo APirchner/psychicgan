@@ -59,6 +59,37 @@ class NormTransConvND(nn.Module):
         return x
 
 
+class NormUpsampleND(nn.Module):
+    """
+     Wrapper for an N-dimensional upsampling followed by a convolution.
+     Should be a substitute for a transposed convolution.
+    """
+    def __init__(self, conv, c_in, c_out, out_size, kernel_size, activation_fun=None, bias=False,
+                 norm=nn.utils.weight_norm, padding=0, mode='nearest'):
+        """
+        :param conv: the convolution function, e.g. torch.nn.Conv2D
+        :param c_in: the input channels
+        :param c_out: the output channels
+        :param out_size: the tensor size of the output of upsampling [c, (t), h, w]
+        :param kernel_size: the kernel size of the conv after upsampling
+        :param activation_fun: the activation function e.g. ReLU
+        :param bias: use bias?
+        :param norm: the normalization function for the weights, e.g. torch.utils.weight_norm
+        :param padding: the amount of zero padding in the convolution
+        :param mode: the mode of the upsampling, 'nearest', 'linear', etc.
+        """
+        super(self).__init__()
+        self.upsample = nn.Upsample(size=out_size, mode=mode)
+        self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+                         stride=1, bias=bias, padding=padding)
+
+    def forward(self, *input):
+        x = self.upsample(input)
+        x = self.norm(self.conv(x)) if self.norm is not None else self.conv(x)
+        x = self.activation_fun(x) if self.activation_fun is not None else x
+        return x
+
+
 class SelfAttentionND(nn.Module):
     """ N-dimensional self attention layer. N is 2 or 3. """
 
