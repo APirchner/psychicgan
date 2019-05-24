@@ -17,7 +17,7 @@ class KITTIData(data.Dataset):
         self.block_overlap = overlap
         
         self.all_trials = sorted([os.path.join(self.root_dir, name) for name in 
-                                   os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, name))])
+                                  os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, name))])
         
     def __getitem__(self,key):
         if isinstance(key, slice):
@@ -95,11 +95,15 @@ def generate_boxes(locs,leng,heig,b_in,b_out,b_ol):
         if locs[idx]<locs[-1]:          # going from left to right
             b_left = max(0,locs[idx].numpy()-np.random.randint(20,80))
             b_right = b_bottom-b_top+b_left
+            if b_right>leng:
+                b_right = leng
+                b_left = b_right-b_bottom+b_top
         else:                          # going from right to left
             b_right = min(locs[idx].numpy()+np.random.randint(20,80),leng)
             b_left = b_right-b_bottom+b_top
-        if b_left<0 or b_right>leng:
-            break
+            if b_left<0:
+                b_left = 0
+                b_right = b_left+b_bottom-b_top
         boxes.append((b_left,b_top,b_right,b_bottom))
         idxs.append(idx)
         idx+=b_in+b_out-b_ol
