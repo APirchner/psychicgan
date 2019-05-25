@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class NormConvND(nn.Module):
@@ -61,27 +62,28 @@ class NormTransConvND(nn.Module):
 
 class NormUpsampleND(nn.Module):
     """
-     Wrapper for an N-dimensional upsampling followed by a convolution.
+     Wrapper for an N-dimensional up-sampling followed by a convolution.
      Should be a substitute for a transposed convolution.
     """
-    def __init__(self, conv, c_in, c_out, out_size, kernel_size, activation_fun=None, bias=False,
-                 norm=nn.utils.weight_norm, padding=0, mode='nearest'):
+
+    def __init__(self, conv, c_in, c_out, out_size, activation_fun=None, norm=nn.utils.weight_norm, mode='nearest'):
         """
         :param conv: the convolution function, e.g. torch.nn.Conv2D
         :param c_in: the input channels
         :param c_out: the output channels
-        :param out_size: the tensor size of the output of upsampling [c, (t), h, w]
-        :param kernel_size: the kernel size of the conv after upsampling
+        :param out_size: the tensor size of the output of up-sampling [c, (t), h, w]
+        :param kernel_size: the kernel size of the conv after up-sampling
         :param activation_fun: the activation function e.g. ReLU
         :param bias: use bias?
         :param norm: the normalization function for the weights, e.g. torch.utils.weight_norm
         :param padding: the amount of zero padding in the convolution
         :param mode: the mode of the upsampling, 'nearest', 'linear', etc.
         """
-        super(self).__init__()
+        super(NormUpsampleND, self).__init__()
         self.upsample = nn.Upsample(size=out_size, mode=mode)
-        self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
-                         stride=1, bias=bias, padding=padding)
+        self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=3,
+                         stride=1, bias=False, padding=1)
+        self.norm = norm
 
     def forward(self, *input):
         x = self.upsample(input)
@@ -118,7 +120,6 @@ class SelfAttentionND(nn.Module):
 
     def forward(self, *input):
         """
-
         :param input: layer input
         :return: tuple of layer output and attention mask
         """
@@ -151,3 +152,141 @@ class SelfAttentionND(nn.Module):
 
         out = input + res
         return out, res
+
+
+class NormConv3D(nn.Module):
+    """
+    3D convenience wrapper for ND conv with 3x3x3 kernel
+    """
+
+    def __init__(self, c_in, c_out, down_spatial=True, down_temporal=True, bias=True, norm=nn.utils.weight_norm,
+                 activation_fun=None):
+        super(NormConv3D, self).__init__()
+
+        if down_spatial and down_temporal:
+            stride = (2, 2, 2)
+        elif down_spatial and not down_temporal:
+            stride = (1, 2, 2)
+        elif not down_spatial and down_temporal:
+            stride = (2, 1, 1)
+        else:
+            stride = (1, 1, 1)
+
+        self.layer = NormConvND(nn.Conv3d, c_in, c_out, 3, stride,
+                                bias, norm, activation_fun, 1)
+
+    def forward(self, *input):
+        x = self.layer(input)
+        return x
+
+
+class ResidualNormConv3D(nn.Module):
+    """
+    3D convenience wrapper for ND conv with 3x3x3 kernel
+    """
+
+    def __init__(self, c_in, c_out, down_spatial=True, down_temporal=True, bias=True,
+                 residual=True, norm=nn.utils.weight_norm, activation_fun=None):
+        super(ResidualNormConv3D, self).__init__()
+
+        self.down_spatial = down_spatial
+        self.down_temporal = down_temporal
+
+        if down_spatial and down_temporal:
+            stride = (2, 2, 2)
+        elif down_spatial and not down_temporal:
+            stride = (1, 2, 2)
+        elif not down_spatial and down_temporal:
+            stride = (2, 1, 1)
+        else:
+            stride = (1, 1, 1)
+
+        self.layer = NormConvND(nn.Conv3d, c_in, c_out, 3, stride,
+                                bias, norm, activation_fun, 1)
+
+    def forward(self, *input):
+        in_shape = list(input.shape)
+
+        if self.down_spatial and self.down_temporal:
+            out_size = (in_shape[0] // 2, in_shape[1] // 2, in_shape[2] // 2)
+        elif self.down_spatial and not self.down_temporal:
+            out_size = (in_shape[0], in_shape[1] // 2, in_shape[2] // 2)
+        elif not self.down_spatial and self.down_temporal:
+            out_size = (in_shape[0] // 2, in_shape[2])
+        else:
+            out_size = in_shape
+
+        x = self.layer(input)
+        x = x + F.interpolate(x, out_size)
+        return x
+
+
+class NormConv2D(nn.Module):
+    """
+    3D convenience wrapper for ND conv
+    """
+
+    def __init__(self, c_in, c_out, kernel_size, stride, bias=True, norm=nn.utils.weight_norm, activation_fun=None):
+        super(NormConv2D, self).__init__()
+        self.layer = NormConvND(nn.Conv2d, c_in, c_out, kernel_size, stride,
+                                bias, norm, activation_fun, padding=kernel_size // 2)
+
+    def forward(self, *input):
+        x = self.layer(input)
+        return x
+
+
+class NormUpsample3D(nn.Module):
+    """
+    3D convenience wrapper for ND up-sample
+    """
+
+    def __init__(self, c_in, c_out, out_size, activation_fun=None, norm=nn.utils.weight_norm, mode='nearest'):
+        super(NormUpsample3D, self).__init__()
+        self.layer = NormUpsampleND(nn.Conv3d, c_in, c_out, out_size, activation_fun, norm, mode)
+
+    def forward(self, *input):
+        x = self.layer(input)
+        return x
+
+
+class NormUpsample2D(nn.Module):
+    """
+    2D convenience wrapper for ND up-sample
+    """
+
+    def __init__(self, c_in, c_out, out_size, activation_fun=None, norm=nn.utils.weight_norm, mode='nearest'):
+        super(NormUpsample2D, self).__init__()
+        self.layer = NormUpsampleND(nn.Conv2d, c_in, c_out, out_size, activation_fun, norm, mode)
+
+    def forward(self, *input):
+        x = self.layer(input)
+        return x
+
+
+class SelfAttention3D(nn.Module):
+    """
+    3D convenience wrapper for ND self-attention
+    """
+
+    def __init__(self, norm, c_in):
+        super(SelfAttention3D, self).__init__()
+        self.layer = SelfAttentionND(3, norm, c_in)
+
+    def forward(self, *input):
+        x, attention_mask = self.layer(input)
+        return x, attention_mask
+
+
+class SelfAttention2D(nn.Module):
+    """
+    2D convenience wrapper for ND self-attention
+    """
+
+    def __init__(self, norm, c_in):
+        super(SelfAttention2D, self).__init__()
+        self.layer = SelfAttentionND(2, norm, c_in)
+
+    def forward(self, *input):
+        x, attention_mask = self.layer(input)
+        return x, attention_mask
