@@ -112,4 +112,3 @@ def generate_boxes(locs, leng, heig, b_in, b_out, b_ol):
         idxs.append(idx)
         idx += b_in + b_out - b_ol
     return boxes, idxs
-

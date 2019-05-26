@@ -17,9 +17,14 @@ if __name__ == '__main__':
     # optimizer args
     parser.add_argument('-e', '--epochs', type=int, default=20, help='The number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
-
+    parser.add_argument('-l', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
+    parser.add_argument('-m', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
+    parser.add_argument('-n', '--lr_discriminator', type=float, default=1e-4, help='The discriminator learning rate')
+    # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_false', help='Disable CUDA')
+
     args = parser.parse_args()
+    print(args)
 
     device = None
     if not args.disable_cuda and torch.cuda.is_available():
@@ -27,8 +32,8 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
 
-    train_data = KITTIData(args.ins, args.outs, 0, args.dir, )
-    train_loader = data.DataLoader(train_data, batch_size=1, shuffle=True, num_workers=1)
+    train_data = KITTIData(args.ins, args.outs, 0, args.dir)
+    train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=1)
 
     loss_fun = nn.MSELoss()
 

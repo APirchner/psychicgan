@@ -29,14 +29,14 @@ class Encoder(nn.Module):
 
         if residual:
             self.down_stack = [layers.ResidualNormConv3D(c_in=filters[i], c_out=filters[i + 1],
-                                                       activation_fun=nn.LeakyReLU,
-                                                       down_spatial=True, down_temporal=temps[i]
-                                                       ) for i in range(self.depth)]
+                                                         activation_fun=nn.LeakyReLU,
+                                                         down_spatial=True, down_temporal=temps[i]
+                                                         ) for i in range(self.depth)]
         else:
             self.down_stack = [layers.NormConv3D(c_in=filters[i], c_out=filters[i + 1],
-                                               activation_fun=nn.LeakyReLU,
-                                               down_spatial=True, down_temporal=temps[i]
-                                               ) for i in range(self.depth)]
+                                                 activation_fun=nn.LeakyReLU,
+                                                 down_spatial=True, down_temporal=temps[i]
+                                                 ) for i in range(self.depth)]
         self.attention = layers.SelfAttention3D(norm, c_in=filters[self.att_idx])
 
     def forward(self, input):
