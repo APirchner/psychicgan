@@ -39,7 +39,7 @@ class Encoder(nn.Module):
                                                ) for i in range(self.depth)]
         self.attention = layers.SelfAttention3D(norm, c_in=filters[self.att_idx])
 
-    def forward(self, *input):
+    def forward(self, input):
         attn = None
         x = input
         for i in range(len(self.down_stack)):

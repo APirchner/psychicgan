@@ -20,13 +20,15 @@ class NormConvND(nn.Module):
         :param padding: the amount of zero padding
         """
         super(NormConvND, self).__init__()
-        self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
-                         stride=stride, bias=bias, padding=padding)
-        self.norm = norm
-        self.activation_fun = activation_fun
+        self.conv = norm(conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+                              stride=stride, bias=bias, padding=padding), name='weight'
+                         ) if norm is not None else conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+                                                         stride=stride, bias=bias, padding=padding
+                                                         )
+        self.activation_fun = activation_fun() if activation_fun is not None else None
 
-    def forward(self, *input):
-        x = self.norm(self.conv(input)) if self.norm is not None else self.conv(input)
+    def forward(self, input):
+        x = self.conv(input)
         x = self.activation_fun(x) if self.activation_fun is not None else x
         return x
 
@@ -49,13 +51,19 @@ class NormTransConvND(nn.Module):
         :param output_padding: the padding to add to the output
         """
         super(NormTransConvND, self).__init__()
-        self.trans_conv = trans_conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
-                                     stride=stride, bias=bias, padding=padding, output_padding=output_padding)
-        self.norm = norm
-        self.activation_fun = activation_fun
+        self.trans_conv = norm(trans_conv(
+            in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+            stride=stride, bias=bias, padding=padding,
+            output_padding=output_padding)
+        ) if norm is not None else trans_conv(in_channels=c_in, out_channels=c_out,
+                                              kernel_size=kernel_size,
+                                              stride=stride, bias=bias,
+                                              padding=padding,
+                                              output_padding=output_padding)
+        self.activation_fun = activation_fun() if activation_fun is not None else None
 
-    def forward(self, *input):
-        x = self.norm(self.trans_conv(input)) if self.norm is not None else self.trans_conv(input)
+    def forward(self, input):
+        x = self.trans_conv(input)
         x = self.activation_fun(x) if self.activation_fun is not None else x
         return x
 
@@ -83,11 +91,12 @@ class NormUpsampleND(nn.Module):
         self.upsample = nn.Upsample(size=out_size, mode=mode)
         self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=3,
                          stride=1, bias=False, padding=1)
-        self.norm = norm
+        self.conv = norm(self.conv, name='weight') if norm is not None else self.conv
+        self.activation_fun = activation_fun() if activation_fun is not None else None
 
-    def forward(self, *input):
+    def forward(self, input):
         x = self.upsample(input)
-        x = self.norm(self.conv(x)) if self.norm is not None else self.conv(x)
+        x = self.conv(x)
         x = self.activation_fun(x) if self.activation_fun is not None else x
         return x
 
@@ -118,13 +127,13 @@ class SelfAttentionND(nn.Module):
                                    kernel_size=1, stride=1, bias=True, norm=norm)
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, *input):
+    def forward(self, input):
         """
         :param input: layer input
         :return: tuple of layer output and attention mask
         """
         # get batch size to infer other dims
-        input_size = input.size()
+        input_size = list(input.shape)
 
         # split input and reduce channels [batch, c, (t), h, w]
         query = self.query_conv(input)
@@ -175,7 +184,7 @@ class NormConv3D(nn.Module):
         self.layer = NormConvND(nn.Conv3d, c_in, c_out, 3, stride,
                                 bias, norm, activation_fun, 1)
 
-    def forward(self, *input):
+    def forward(self, input):
         x = self.layer(input)
         return x
 
@@ -191,6 +200,7 @@ class ResidualNormConv3D(nn.Module):
 
         self.down_spatial = down_spatial
         self.down_temporal = down_temporal
+        self.c_in = c_in
 
         if down_spatial and down_temporal:
             stride = (2, 2, 2)
@@ -203,22 +213,24 @@ class ResidualNormConv3D(nn.Module):
 
         self.layer = NormConvND(nn.Conv3d, c_in, c_out, 3, stride,
                                 bias, norm, activation_fun, 1)
+        self.layer_1 = NormConvND(nn.Conv3d, c_in, c_out, 1, 1,
+                                  bias, norm, activation_fun, 0)
 
-    def forward(self, *input):
+    def forward(self, input):
         in_shape = list(input.shape)
 
         if self.down_spatial and self.down_temporal:
-            out_size = (in_shape[0] // 2, in_shape[1] // 2, in_shape[2] // 2)
+            out_size = (in_shape[2] // 2, in_shape[3] // 2, in_shape[4] // 2)
         elif self.down_spatial and not self.down_temporal:
-            out_size = (in_shape[0], in_shape[1] // 2, in_shape[2] // 2)
+            out_size = (in_shape[2], in_shape[3] // 2, in_shape[4] // 2)
         elif not self.down_spatial and self.down_temporal:
-            out_size = (in_shape[0] // 2, in_shape[2])
+            out_size = (in_shape[2] // 2, in_shape[3], in_shape[4])
         else:
-            out_size = in_shape
+            out_size = in_shape[1:]
 
         x = self.layer(input)
-        x = x + F.interpolate(x, out_size)
-        return x
+        y = self.layer_1(F.interpolate(input, out_size))
+        return x + y
 
 
 class NormConv2D(nn.Module):
@@ -231,7 +243,7 @@ class NormConv2D(nn.Module):
         self.layer = NormConvND(nn.Conv2d, c_in, c_out, kernel_size, stride,
                                 bias, norm, activation_fun, padding=kernel_size // 2)
 
-    def forward(self, *input):
+    def forward(self, input):
         x = self.layer(input)
         return x
 
@@ -245,7 +257,7 @@ class NormUpsample3D(nn.Module):
         super(NormUpsample3D, self).__init__()
         self.layer = NormUpsampleND(nn.Conv3d, c_in, c_out, out_size, activation_fun, norm, mode)
 
-    def forward(self, *input):
+    def forward(self, input):
         x = self.layer(input)
         return x
 
@@ -259,7 +271,7 @@ class NormUpsample2D(nn.Module):
         super(NormUpsample2D, self).__init__()
         self.layer = NormUpsampleND(nn.Conv2d, c_in, c_out, out_size, activation_fun, norm, mode)
 
-    def forward(self, *input):
+    def forward(self, input):
         x = self.layer(input)
         return x
 
@@ -273,7 +285,7 @@ class SelfAttention3D(nn.Module):
         super(SelfAttention3D, self).__init__()
         self.layer = SelfAttentionND(3, norm, c_in)
 
-    def forward(self, *input):
+    def forward(self, input):
         x, attention_mask = self.layer(input)
         return x, attention_mask
 
@@ -287,6 +299,6 @@ class SelfAttention2D(nn.Module):
         super(SelfAttention2D, self).__init__()
         self.layer = SelfAttentionND(2, norm, c_in)
 
-    def forward(self, *input):
+    def forward(self, input):
         x, attention_mask = self.layer(input)
         return x, attention_mask

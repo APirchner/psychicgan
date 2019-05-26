@@ -34,7 +34,7 @@ class Generator(nn.Module):
                                                ) for i in range(self.depth)]
         self.attention = layers.SelfAttention3D(norm, c_in=filters[self.att_idx])
 
-    def forward(self, *input):
+    def forward(self, input):
         x = self.linear(input)
         x = x.reshape((-1, self.init_filters, 1, 4, 4))
         for i in range(len(self.up_stack)):
