@@ -228,9 +228,8 @@ class ResidualNormConv3D(nn.Module):
         else:
             out_size = in_shape[1:]
 
-        x = self.layer(input)
-        y = self.layer_1(F.interpolate(input, out_size))
-        return x + y
+        x = self.layer(input) + self.layer_1(F.interpolate(input, out_size))
+        return x
 
 
 class NormConv2D(nn.Module):
