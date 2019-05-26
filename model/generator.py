@@ -28,10 +28,10 @@ class Generator(nn.Module):
         out_sizes = [(temp_sizes[i], 2 ** (i + 3), 2 ** (i + 3)) for i in range(self.depth)]
 
         self.linear = nn.Linear(hidden_dim, 4 * 4 * init_filters, bias=True)
-        self.up_stack = [layers.NormUpsample3D(c_in=filters[i], c_out=filters[i + 1],
-                                               out_size=out_sizes[i],
-                                               activation_fun=nn.LeakyReLU if i < self.depth else nn.Tanh
-                                               ) for i in range(self.depth)]
+        self.up_stack = nn.ModuleList([layers.NormUpsample3D(c_in=filters[i], c_out=filters[i + 1],
+                                                             out_size=out_sizes[i],
+                                                             activation_fun=nn.LeakyReLU if i < self.depth else nn.Tanh
+                                                             ) for i in range(self.depth)])
         self.attention = layers.SelfAttention3D(norm, c_in=filters[self.att_idx])
 
     def forward(self, input):
