@@ -14,7 +14,7 @@ class Encoder(nn.Module):
         # go from 2^n up to 2^2
         self.depth = int(np.log2(frame_dim) - 2)
         # get position of attention layer
-        self.att_idx = - int(np.log2(attention_at)) + self.depth
+        self.att_idx = int(np.log2(attention_at))
         self.out_filters = out_filters
 
         # get number of filters, target number gets div by 2 every layer

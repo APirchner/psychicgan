@@ -54,10 +54,9 @@ if __name__ == '__main__':
     generator = generator.to(device)
     generator_optim = optim.Adam(generator.parameters(), betas=(0.5, 0.999))
 
-    # summary(encoder, input_size=(3, args.ins, 64, 64))
-    # summary(encoder, input_size=(128, ))
-    print(encoder)
-    print(generator)
+    summary(encoder, input_size=(3, args.ins, 64, 64))
+    summary(generator, input_size=(128, ))
+
 
     for epoch in range(args.epochs):
         running_loss = 0.0
@@ -85,5 +84,5 @@ if __name__ == '__main__':
             if i % 10 == 9:
                 print('[Epoch {0} - Step {1}] Loss: {2}'.format(epoch, i, loss / 10))
                 plt.imsave(
-                    '/home/andreas/Documents/msc_info/sem_2/adl4cv/kitti/test/epoch{0}step{1}.jpg'.format(epoch, i),
+                    args.sample_dir + 'epoch{0}step{1}.jpg'.format(epoch, i),
                     np.transpose(generated[1].squeeze().detach().cpu()))
