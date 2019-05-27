@@ -50,7 +50,7 @@ if __name__ == '__main__':
     encoder_optim = optim.Adam(encoder.parameters(), betas=(0.9, 0.999))
 
     generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=128,
-                          init_filters=256, attention_at=8, norm=nn.utils.weight_norm)
+                          init_filters=256, attention_at=32, norm=nn.utils.weight_norm)
     generator = generator.to(device)
     generator_optim = optim.Adam(generator.parameters(), betas=(0.5, 0.999))
 
@@ -83,6 +83,7 @@ if __name__ == '__main__':
             running_loss += loss.item()
             if i % 10 == 9:
                 print('[Epoch {0} - Step {1}] Loss: {2}'.format(epoch, i, loss / 10))
-                plt.imsave(
-                    args.sample_dir + 'epoch{0}step{1}.jpg'.format(epoch, i),
-                    np.transpose(generated[1].squeeze().detach().cpu()))
+
+    plt.imsave(
+        args.sample_dir + 'epoch{0}step{1}.jpg'.format(epoch, i),
+        np.transpose(generated[1].squeeze().detach().cpu()))

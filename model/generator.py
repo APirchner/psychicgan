@@ -13,7 +13,7 @@ class Generator(nn.Module):
         # go from 2^2 up to 2^n
         self.depth = int(np.log2(frame_dim) - 2)
         # get position of attention layer
-        self.att_idx = self.depth - int(np.log2(attention_at))
+        self.att_idx = self.depth - 1
         self.init_filters = init_filters
 
         # get number of filters, initial number gets div by 2 every layer
