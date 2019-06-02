@@ -12,6 +12,7 @@ from torchsummary import summary
 from utils.data_utils import *
 from model.encoder import Encoder
 from model.generator import Generator
+from model.discriminator import Discrimator
 
 if __name__ == '__main__':
 
@@ -54,9 +55,14 @@ if __name__ == '__main__':
     generator = generator.to(device)
     generator_optim = optim.Adam(generator.parameters(), betas=(0.5, 0.999))
 
-    summary(encoder, input_size=(3, args.ins, 64, 64))
-    summary(generator, input_size=(128, ))
+    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128,
+                                out_filters=256, attention_at=8, norm=nn.utils.weight_norm)
+    discriminator = discriminator.to(device)
+    discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.9, 0.999))
 
+    summary(encoder, input_size=(3, args.ins, 64, 64))
+    summary(generator, input_size=(128,))
+    summary(discriminator, input_size=(3, args.ins, 64, 64))
 
     for epoch in range(args.epochs):
         running_loss = 0.0
@@ -69,15 +75,31 @@ if __name__ == '__main__':
             # zero the parameter gradients
             encoder_optim.zero_grad()
             generator_optim.zero_grad()
+            discriminator.zero_grad()
 
+            # DISCRIMINATOR TRAINING
             # forward + backward + optimize
-            hidden, encoder_attn = encoder(in_frames)
-            generated, generator_attn = generator(hidden)
-            loss = loss_fun(generated, out_frames)
+            with torch.no_grad():
+                hidden, _ = encoder(in_frames)
+                generated, _ = generator(hidden)
+            features_real, disc_attn_real = discriminator(out_frames)
+            features_gen, disc_attn_gen = discriminator(generated)
+            loss = loss_fun(features_real, features_gen)
 
             loss.backward()
-            generator_optim.step()
+            discriminator_optim.step()
+
+            # GENERATOR/ENCODER TRAINING
+            hidden, encoder_attn = encoder(in_frames)
+            generated, generator_attn = generator(hidden)
+
+            features_real, disc_attn_real = discriminator(out_frames)
+            features_gen, disc_attn_gen = discriminator(generated)
+
+            loss = loss_fun(features_real, features_gen)
+
             encoder_optim.step()
+            generator_optim.step()
 
             # print statistics
             running_loss += loss.item()
