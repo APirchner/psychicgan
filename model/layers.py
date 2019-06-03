@@ -166,7 +166,7 @@ class SelfAttentionND(nn.Module):
         res = res.view(input_size[0], self.c_inter, *input_size[2:])
         res = self.container["att_conv"](res)
 
-        out = res
+        out = input + res
         return out, res
 
 

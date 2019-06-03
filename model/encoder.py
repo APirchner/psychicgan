@@ -19,7 +19,7 @@ class Encoder(nn.Module):
 
         # get number of filters, target number gets div by 2 every layer
         filters = [3]
-        filters.extend([self.out_filters // (2 ** i) for i in range(self.depth, 1, -1)])
+        filters.extend([self.out_filters // (2 ** i) for i in range(self.depth-1, 0, -1)])
         filters.append(self.out_filters)
 
         temps = [True if i > 1 else False for i in range(init_temp, 0, -1)]
