@@ -121,15 +121,16 @@ class SelfAttentionND(nn.Module):
 
         # channel reduction like in self-attention GAN paper
         self.c_inter = c_in // 8
+        self.c_inter2 = c_in // 2
 
         self.container = nn.ModuleDict({
             'query_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
                                      kernel_size=1, stride=1, bias=True, norm=norm),
             'key_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
                                    kernel_size=1, stride=1, bias=True, norm=norm),
-            'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
+            'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter2,
                                      kernel_size=1, stride=1, bias=True, norm=norm),
-            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=self.c_inter, c_out=c_in,
+            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=self.c_inter2, c_out=c_in,
                                    kernel_size=1, stride=1, bias=True, norm=norm),
             'softmax': nn.Softmax(dim=-1)
         })
@@ -150,7 +151,7 @@ class SelfAttentionND(nn.Module):
         # reshape to [batch, c_inter, (t) * h * w]
         query = query.view(input_size[0], self.c_inter, -1)
         key = key.view(input_size[0], self.c_inter, -1)
-        value = value.view(input_size[0], self.c_inter, -1)
+        value = value.view(input_size[0], self.c_inter2, -1)
 
         # transpose to [batch, (t) * h * w, c_inter]
         query_t = query.permute(0, 2, 1)
@@ -163,9 +164,11 @@ class SelfAttentionND(nn.Module):
 
         # query-key value product
         res = torch.bmm(query_x_key, value_t)
-        res = res.view(input_size[0], self.c_inter, *input_size[2:])
+        res = res.view(input_size[0], self.c_inter2 , *input_size[2:])
         res = self.container["att_conv"](res)
 
+        #print(input.shape,res.shape)
+        #import pdb; pdb.set_trace()
         out = input + res
         return out, res
 
