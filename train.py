@@ -14,6 +14,15 @@ from model.encoder import Encoder
 from model.generator import Generator
 from model.discriminator import Discrimator
 
+
+def weight_init(net):
+    classname = net.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(net.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(net.weight.data, 1.0, 0.02)
+        nn.init.constant_(net.bias.data, 0)
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -63,6 +72,10 @@ if __name__ == '__main__':
                                 out_filters=256, attention_at=8, norm=nn.utils.weight_norm)
     discriminator = discriminator.to(device)
     discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.9, 0.999))
+
+    encoder.apply(weight_init)
+    generator.apply(weight_init)
+    discriminator.apply(weight_init)
 
     summary(encoder, input_size=(3, args.ins, 64, 64))
     summary(generator, input_size=(128,))
