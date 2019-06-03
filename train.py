@@ -40,8 +40,12 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
 
-    train_data = KITTIData(args.ins, args.outs, 0, args.dir)
+    print(device)
+
+    all_data = KITTIData(args.ins, args.outs, 0, args.dir)
+    [train_data,val_data] = data.random_split(all_data,[1100,243])
     train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=16)
+    val_loader = data.DataLoader(val_data, batch_size = 1, shuffle = False, num_workers = 1)
 
     loss_fun = nn.MSELoss()
 
@@ -102,10 +106,21 @@ if __name__ == '__main__':
             generator_optim.step()
 
             # print statistics
-            running_loss += loss.item()
+            running_loss += loss.item() / 10
             if i % 10 == 9:
-                print('[Epoch {0} - Step {1}] Loss: {2}'.format(epoch, i, loss / 10))
+                print('[Epoch {0} - Step {1}] Loss: {2}'.format(epoch, i, running_loss))
+                running_loss = 0
+                #plt.imsave('/home/andreas/Documents/msc_info/sem_2/adl4cv/kitti/test/epoch{0}step{1}.jpg'.format(epoch, i),
+                #           np.transpose(generated[1].squeeze().detach().cpu()))
 
-    plt.imsave(
-        args.sample_dir + 'epoch{0}step{1}.jpg'.format(epoch, i),
-        np.transpose(generated[1].squeeze().detach().cpu()))
+        val_loss = 0.0
+        for inval, outval in val_loader:
+            # get the validation inputs and outputs
+            inval, outval = inval.to(device), outval.to(device)
+
+            # forward
+            hidval, encval_attn = encoder(inval)
+            genval, genval_attn = generator(hidval)
+            val_loss += loss_fun(genval, outval).item() / len(val_loader)
+
+        print('[Epoch {0}] Val-Loss: {1}'.format(epoch, val_loss))

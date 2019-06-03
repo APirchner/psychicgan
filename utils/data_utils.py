@@ -51,6 +51,9 @@ class KITTIData(data.Dataset):
 
         targets = [Image.open(os.path.join(folder_to_read, x)) for x in images_future]
         targets = torch.stack([to_tensor(img) for img in targets], dim=1)
+        
+        # normalize to (-1, 1)
+        
 
         return imgs, targets
 
