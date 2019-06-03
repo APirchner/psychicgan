@@ -20,14 +20,18 @@ class NormConvND(nn.Module):
         :param padding: the amount of zero padding
         """
         super(NormConvND, self).__init__()
-        self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
-                              stride=stride, bias=bias, padding=padding)
-        self.norm = norm(self.coonv, name='weight') if norm is not None else None
-        self.activation_fun = activation_fun() if activation_fun is not None else None
+        self.container = nn.ModuleDict({
+            'conv': norm(conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+                              stride=stride, bias=bias, padding=padding), name='weight'
+                         ) if norm is not None else conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+                                                         stride=stride, bias=bias, padding=padding
+                                                         ),
+            'activation': activation_fun() if activation_fun is not None else None
+        })
 
     def forward(self, input):
-        x = self.norm(self.conv(input)) if self.norm is not None else self.conv(input)
-        x = self.activation_fun(x) if self.activation_fun is not None else x
+        x = self.container['conv'](input)
+        x = self.container['activation'](x) if self.container['activation'] is not None else x
         return x
 
 
@@ -49,20 +53,22 @@ class NormTransConvND(nn.Module):
         :param output_padding: the padding to add to the output
         """
         super(NormTransConvND, self).__init__()
-        self.trans_conv = norm(trans_conv(
-            in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
-            stride=stride, bias=bias, padding=padding,
-            output_padding=output_padding)
-        ) if norm is not None else trans_conv(in_channels=c_in, out_channels=c_out,
-                                              kernel_size=kernel_size,
-                                              stride=stride, bias=bias,
-                                              padding=padding,
-                                              output_padding=output_padding)
-        self.activation_fun = activation_fun() if activation_fun is not None else None
+        self.container = nn.ModuleDict({
+            'conv': norm(trans_conv(
+                in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+                stride=stride, bias=bias, padding=padding,
+                output_padding=output_padding)
+            ) if norm is not None else trans_conv(in_channels=c_in, out_channels=c_out,
+                                                  kernel_size=kernel_size,
+                                                  stride=stride, bias=bias,
+                                                  padding=padding,
+                                                  output_padding=output_padding),
+            'activation': activation_fun() if activation_fun is not None else None
+        })
 
     def forward(self, input):
-        x = self.trans_conv(input)
-        x = self.activation_fun(x) if self.activation_fun is not None else x
+        x = self.container['conv'](input)
+        x = self.container['activation'](x) if self.container['activation'] is not None else x
         return x
 
 
@@ -86,16 +92,17 @@ class NormUpsampleND(nn.Module):
         :param mode: the mode of the upsampling, 'nearest', 'linear', etc.
         """
         super(NormUpsampleND, self).__init__()
-        self.upsample = nn.Upsample(size=out_size, mode=mode)
-        self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=3,
-                         stride=1, bias=False, padding=1)
-        self.conv = norm(self.conv, name='weight') if norm is not None else self.conv
-        self.activation_fun = activation_fun() if activation_fun is not None else None
+        self.container = nn.ModuleDict({
+            'upsample': nn.Upsample(size=out_size, mode=mode),
+            'conv': conv(in_channels=c_in, out_channels=c_out, kernel_size=3,
+                         stride=1, bias=False, padding=1),
+            'activation': activation_fun() if activation_fun is not None else None
+        })
 
     def forward(self, input):
-        x = self.upsample(input)
-        x = self.conv(x)
-        x = self.activation_fun(x) if self.activation_fun is not None else x
+        x = self.container['upsample'](input)
+        x = self.container['conv'](x)
+        x = self.container['activation'](x) if self.container['activation'] is not None else x
         return x
 
 
@@ -114,16 +121,18 @@ class SelfAttentionND(nn.Module):
 
         # channel reduction like in self-attention GAN paper
         self.c_inter = c_in // 8
-        self.query_conv = NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
-                                     kernel_size=1, stride=1, bias=True, norm=norm)
-        self.key_conv = NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
-                                   kernel_size=1, stride=1, bias=True, norm=norm)
-        self.value_conv = NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
-                                     kernel_size=1, stride=1, bias=True, norm=norm)
-        # conv to restore number of input channels
-        self.att_conv = NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=self.c_inter, c_out=c_in,
-                                   kernel_size=1, stride=1, bias=True, norm=norm)
-        self.softmax = nn.Softmax(dim=-1)
+
+        self.container = nn.ModuleDict({
+            'query_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
+                                     kernel_size=1, stride=1, bias=True, norm=norm),
+            'key_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
+                                   kernel_size=1, stride=1, bias=True, norm=norm),
+            'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
+                                     kernel_size=1, stride=1, bias=True, norm=norm),
+            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=self.c_inter, c_out=c_in,
+                                   kernel_size=1, stride=1, bias=True, norm=norm),
+            'softmax': nn.Softmax(dim=-1)
+        })
 
     def forward(self, input):
         """
@@ -134,9 +143,9 @@ class SelfAttentionND(nn.Module):
         input_size = list(input.shape)
 
         # split input and reduce channels [batch, c, (t), h, w]
-        query = self.query_conv(input)
-        key = self.key_conv(input)
-        value = self.value_conv(input)
+        query = self.container['query_conv'](input)
+        key = self.container['key_conv'](input)
+        value = self.container['value_conv'](input)
 
         # reshape to [batch, c_inter, (t) * h * w]
         query = query.view(input_size[0], self.c_inter, -1)
@@ -150,7 +159,7 @@ class SelfAttentionND(nn.Module):
         # query key product and softmax
         # [batch, (t) * h * w, c_inter] * [batch, c_inter, (t) * h * w]
         query_x_key = torch.bmm(query_t, key)
-        query_x_key = self.softmax(query_x_key)
+        query_x_key = self.container['softmax'](query_x_key)
 
         # query-key value product
         res = torch.bmm(query_x_key, value_t)
