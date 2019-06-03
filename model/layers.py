@@ -164,9 +164,9 @@ class SelfAttentionND(nn.Module):
         # query-key value product
         res = torch.bmm(query_x_key, value_t)
         res = res.view(input_size[0], self.c_inter, *input_size[2:])
-        res = self.att_conv(res)
+        res = self.container["att_conv"](res)
 
-        out = input + res
+        out = res
         return out, res
 
 
