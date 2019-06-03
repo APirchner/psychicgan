@@ -20,15 +20,13 @@ class NormConvND(nn.Module):
         :param padding: the amount of zero padding
         """
         super(NormConvND, self).__init__()
-        self.conv = norm(conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
-                              stride=stride, bias=bias, padding=padding), name='weight'
-                         ) if norm is not None else conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
-                                                         stride=stride, bias=bias, padding=padding
-                                                         )
+        self.conv = conv(in_channels=c_in, out_channels=c_out, kernel_size=kernel_size,
+                              stride=stride, bias=bias, padding=padding)
+        self.norm = norm(self.coonv, name='weight') if norm is not None else None
         self.activation_fun = activation_fun() if activation_fun is not None else None
 
     def forward(self, input):
-        x = self.conv(input)
+        x = self.norm(self.conv(input)) if self.norm is not None else self.conv(input)
         x = self.activation_fun(x) if self.activation_fun is not None else x
         return x
 
