@@ -161,6 +161,7 @@ class SelfAttentionND(nn.Module):
         # [batch, (t) * h * w, c_inter] * [batch, c_inter, (t) * h * w]
         query_x_key = torch.bmm(query_t, key)
         query_x_key = self.container['softmax'](query_x_key)
+        attn_out = query_x_key.view(input_size[0], *input_size[2:], *input_size[2:])
 
         # query-key value product
         res = torch.bmm(query_x_key, value_t)
@@ -170,7 +171,7 @@ class SelfAttentionND(nn.Module):
         #print(input.shape,res.shape)
         #import pdb; pdb.set_trace()
         out = input + res
-        return out, res
+        return out, attn_out
 
 
 class NormConv3D(nn.Module):
