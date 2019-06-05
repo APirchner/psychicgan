@@ -116,9 +116,9 @@ if __name__ == '__main__':
             # GENERATOR/ENCODER TRAINING
             hidden, encoder_attn = encoder(in_frames)
             generated, generator_attn = generator(hidden)
-
-            features_real, disc_attn_real = discriminator(out_frames)
-            features_gen, disc_attn_gen = discriminator(generated)
+            with torch.no_grad():
+                features_real, disc_attn_real = discriminator(out_frames)
+                features_gen, disc_attn_gen = discriminator(generated)
 
             gen_loss = gen_loss_fun(features_real, features_gen)
             gen_loss.backward()
