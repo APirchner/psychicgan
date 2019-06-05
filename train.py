@@ -59,18 +59,18 @@ if __name__ == '__main__':
     disc_loss_fun = nn.BCEWithLogitsLoss()
     gen_loss_fun = nn.MSELoss()
 
-    encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=128, out_filters=256,
+    encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=128, filters=[32, 64, 128, 256],
                       attention_at=8, norm=nn.utils.weight_norm, residual=True)
     encoder = encoder.to(device)
     encoder_optim = optim.Adam(encoder.parameters(), betas=(0.5, 0.999))
 
     generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=128,
-                          init_filters=256, attention_at=32, norm=nn.utils.weight_norm)
+                          filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.weight_norm)
     generator = generator.to(device)
     generator_optim = optim.Adam(generator.parameters(), betas=(0.5, 0.999))
 
     discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128,
-                                out_filters=256, attention_at=8, norm=nn.utils.weight_norm)
+                                filters=[32, 64, 128, 256], attention_at=8, norm=nn.utils.weight_norm)
     discriminator = discriminator.to(device)
     discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.5, 0.999))
 
@@ -131,7 +131,7 @@ if __name__ == '__main__':
             features_real, logits_real, disc_attn_real = discriminator(out_frames)
             features_gen, logits_gen, disc_attn_gen = discriminator(generated)
 
-            gen_loss = gen_loss_fun(features_real, features_gen)
+            gen_loss = gen_loss_fun(torch.mean(features_real, dim=0), torch.mean(features_gen, dim=0))
             gen_loss.backward()
 
             tb_witer.add_scalar('GE_loss', gen_loss.item(), global_step=global_step)
