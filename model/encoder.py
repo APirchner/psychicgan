@@ -27,16 +27,23 @@ class Encoder(nn.Module):
 
         self.linear = nn.Linear(4 * 4 * out_filters, hidden_dim, bias=True)
 
-        if residual:
-            self.down_stack = nn.ModuleList([layers.ResidualNormConv3D(c_in=filters[i], c_out=filters[i + 1],
-                                                                       activation_fun=nn.LeakyReLU,
-                                                                       down_spatial=True, down_temporal=temps[i]
-                                                                       ) for i in range(self.depth)])
-        else:
-            self.down_stack = nn.ModuleList([layers.NormConv3D(c_in=filters[i], c_out=filters[i + 1],
-                                                               activation_fun=nn.LeakyReLU,
-                                                               down_spatial=True, down_temporal=temps[i]
-                                                               ) for i in range(self.depth)])
+        self.down_stack = []
+
+        for i in range(self.depth):
+            if residual:
+                self.down_stack.append(layers.ResidualNormConv3D(c_in=filters[i], c_out=filters[i + 1],
+                                                                 activation_fun=nn.LeakyReLU,
+                                                                 down_spatial=True, down_temporal=temps[i])
+                                       )
+                self.down_stack.append(nn.BatchNorm3d(num_features=filters[i + 1]))
+            else:
+                self.down_stack.append(layers.NormConv3D(c_in=filters[i], c_out=filters[i + 1],
+                                                         activation_fun=nn.LeakyReLU,
+                                                         down_spatial=True, down_temporal=temps[i])
+                                       )
+                self.down_stack.append(nn.BatchNorm3d(num_features=filters[i + 1]))
+        self.down_stack = nn.ModuleList(self.down_stack)
+
         self.attention = layers.SelfAttention3D(norm, c_in=filters[self.att_idx])
 
     def forward(self, input):
