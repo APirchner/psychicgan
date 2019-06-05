@@ -128,15 +128,16 @@ class SelfAttentionND(nn.Module):
 
         # channel reduction like in self-attention GAN paper
         self.c_inter = c_in // 8
+        self.c_inter_value = c_in // 2
 
         self.container = nn.ModuleDict({
             'query_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
                                      kernel_size=1, stride=1, bias=True, norm=norm),
             'key_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
                                    kernel_size=1, stride=1, bias=True, norm=norm),
-            'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
+            'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter_value,
                                      kernel_size=1, stride=1, bias=True, norm=norm),
-            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=self.c_inter, c_out=c_in,
+            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=self.c_inter_value, c_out=c_in,
                                    kernel_size=1, stride=1, bias=True, norm=norm),
             'softmax': nn.Softmax(dim=-1)
         })
@@ -157,7 +158,7 @@ class SelfAttentionND(nn.Module):
         # reshape to [batch, c_inter, (t) * h * w]
         query = query.view(input_size[0], self.c_inter, -1)
         key = key.view(input_size[0], self.c_inter, -1)
-        value = value.view(input_size[0], self.c_inter, -1)
+        value = value.view(input_size[0], self.c_inter_value, -1)
 
         # transpose to [batch, (t) * h * w, c_inter]
         query_t = query.permute(0, 2, 1)
@@ -170,10 +171,10 @@ class SelfAttentionND(nn.Module):
 
         # query-key value product
         res = torch.bmm(query_x_key, value_t)
-        res = res.view(input_size[0], self.c_inter, *input_size[2:])
+        res = res.view(input_size[0], self.c_inter_value, *input_size[2:])
         res = self.container['att_conv'](res)
 
-        out = res  # input + res
+        out = input + res
         return out, res
 
 
@@ -225,9 +226,11 @@ class ResidualNormConv3D(nn.Module):
         else:
             stride = (1, 1, 1)
 
+        # strided 3x3 convolution
         self.layer = NormConvND(nn.Conv3d, c_in, c_out, 3, stride,
                                 bias, nn.BatchNorm3d(c_out) if batchnorm else None, norm, activation_fun, 1)
-        self.layer_1 = NormConvND(nn.Conv3d, c_in, c_out, 1, 1,
+        # residual pass 1x1 convolution to match filter number
+        self.layer_res = NormConvND(nn.Conv3d, c_in, c_out, 1, 1,
                                   bias, nn.BatchNorm3d(c_out) if batchnorm else None, norm, None, 0)
 
     def forward(self, input):
@@ -242,7 +245,7 @@ class ResidualNormConv3D(nn.Module):
         else:
             out_size = in_shape[1:]
 
-        x = self.layer(input) + self.layer_1(F.interpolate(input, out_size))
+        x = self.layer(input) + self.layer_res(F.interpolate(input, out_size))
         return x
 
 

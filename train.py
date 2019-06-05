@@ -34,8 +34,8 @@ if __name__ == '__main__':
     # optimizer args
     parser.add_argument('-e', '--epochs', type=int, default=20, help='The number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
-    parser.add_argument('-l', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
-    parser.add_argument('-m', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
+    parser.add_argument('-l', '--lr_generator', type=float, default=5e-5, help='The generator learning rate')
+    parser.add_argument('-m', '--lr_encoder', type=float, default=5e-5, help='The encoder learning rate')
     parser.add_argument('-n', '--lr_discriminator', type=float, default=1e-4, help='The discriminator learning rate')
     # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_true', help='Disable CUDA')
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=16)
     val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=1)
 
-    disc_loss_fun = nn.MSELoss()
+    disc_loss_fun = nn.BCEWithLogitsLoss()
     gen_loss_fun = nn.MSELoss()
 
     encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=128, out_filters=256,
@@ -87,13 +87,19 @@ if __name__ == '__main__':
     global_step = 0
 
     for epoch in range(args.epochs):
-        disc_running_loss = 0.0
+        disc_running_loss_real = 0.0
+        disc_running_loss_gen = 0.0
         gen_running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             # get the inputs and move them to device
             in_frames, out_frames = data
             in_frames = in_frames.to(device)
             out_frames = out_frames.to(device)
+
+            # target for discriminator training
+            batch_size = in_frames.shape[0]
+            y_real = torch.ones((batch_size,), dtype=torch.float32).to(device)
+            y_gen = torch.zeros((batch_size,), dtype=torch.float32).to(device)
 
             # zero the parameter gradients
             encoder_optim.zero_grad()
@@ -104,21 +110,26 @@ if __name__ == '__main__':
             with torch.no_grad():  # fix generator/encoder
                 hidden, _ = encoder(in_frames)
                 generated, _ = generator(hidden)
-            features_real, disc_attn_real = discriminator(out_frames)
-            features_gen, disc_attn_gen = discriminator(generated)
-            disc_loss = disc_loss_fun(features_real, features_gen)
+            _, logits_real, _ = discriminator(out_frames)
+            _, logits_gen, _ = discriminator(generated)
+            # loss on real batch
+            disc_loss_real = disc_loss_fun(logits_real, y_real)
+            disc_loss_real.backward()
+            # loss on fake batch
+            disc_loss_gen = disc_loss_fun(logits_gen, y_gen)
+            disc_loss_gen.backward()
 
-            tb_witer.add_scalar('D_loss', disc_loss.item(), global_step=global_step)
-
-            disc_loss.backward()
             discriminator_optim.step()
+
+            tb_witer.add_scalar('D_loss_real', disc_loss_real.item(), global_step=global_step)
+            tb_witer.add_scalar('D_loss_gen', disc_loss_gen.item(), global_step=global_step)
 
             # GENERATOR/ENCODER TRAINING
             hidden, encoder_attn = encoder(in_frames)
             generated, generator_attn = generator(hidden)
-            with torch.no_grad():
-                features_real, disc_attn_real = discriminator(out_frames)
-                features_gen, disc_attn_gen = discriminator(generated)
+
+            features_real, logits_real, disc_attn_real = discriminator(out_frames)
+            features_gen, logits_gen, disc_attn_gen = discriminator(generated)
 
             gen_loss = gen_loss_fun(features_real, features_gen)
             gen_loss.backward()
@@ -129,11 +140,12 @@ if __name__ == '__main__':
             generator_optim.step()
 
             # print statistics
-            disc_running_loss += disc_loss.item()
+            disc_running_loss_real += disc_loss_real.item()
+            disc_running_loss_gen += disc_loss_gen.item()
             gen_running_loss += gen_loss.item()
             if i % 10 == 9:
-                print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3}'.format(
-                    epoch, i, disc_running_loss / 10, gen_running_loss / 10))
+                print('[Epoch {0} - Step {1}] Loss: (D real) {2} / (D gen) {3} - (G) {4}'.format(
+                    epoch, i, disc_running_loss_real / 10, disc_running_loss_gen / 10, gen_running_loss / 10))
             # log generated images
             if i % 10 == 9:
                 gen_imgs = torchvision.utils.make_grid(generated.squeeze())

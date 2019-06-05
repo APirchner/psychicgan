@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 import torch.nn as nn
 
 from model import layers
@@ -14,7 +15,7 @@ class Discrimator(nn.Module):
         # go from 2^n up to 2^2
         self.depth = int(np.log2(frame_dim) - 2)
         # get position of attention layer
-        self.att_idx = int(np.log2(attention_at)) - 2
+        self.att_idx = self.depth - int(np.log2(attention_at)) + 2
         self.out_filters = out_filters
 
         # get number of filters, target number gets div by 2 every layer
@@ -23,9 +24,10 @@ class Discrimator(nn.Module):
         filters.append(self.out_filters)
 
         temps = [True if i > 1 else False for i in range(init_temp, 0, -1)]
-        temps = temps + [False for i in range(self.depth - len(temps))]
+        temps = temps + [False for _ in range(self.depth - len(temps))]
 
-        self.linear = nn.Linear(4 * 4 * out_filters, feature_dim, bias=True)
+        self.linear = nn.Linear(out_filters, feature_dim, bias=True)
+        self.logits = nn.Linear(feature_dim, 1, bias=True)
 
         self.down_stack = []
 
@@ -54,6 +56,7 @@ class Discrimator(nn.Module):
             if i == self.att_idx:
                 x, attn = self.attention(x)
             x = self.down_stack[i](x)
-        x = x.reshape((-1, 4 * 4 * self.out_filters))
-        x = self.linear(x)
-        return x, attn
+        x = torch.mean(x, dim=[2, 3, 4])
+        feat = self.linear(x)
+        logits = self.logits(feat)
+        return feat, logits.squeeze(), attn

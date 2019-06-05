@@ -11,9 +11,9 @@ class Generator(nn.Module):
         assert not frame_dim & (frame_dim - 1) and not attention_at & (attention_at - 1)
 
         # go from 2^2 up to 2^n
-        self.depth = int(np.log2(frame_dim) - 2)
+        self.depth = int(np.log2(frame_dim)) - 2
         # get position of attention layer
-        self.att_idx = self.depth - 1
+        self.att_idx = int(np.log2(attention_at)) - 2
         self.init_filters = init_filters
 
         # get number of filters, initial number gets div by 2 every layer
