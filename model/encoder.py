@@ -14,7 +14,7 @@ class Encoder(nn.Module):
         # go from 2^n up to 2^2
         self.depth = int(np.log2(frame_dim) - 2)
         # get position of attention layer
-        self.att_idx = int(np.log2(attention_at))
+        self.att_idx = self.depth - int(np.log2(attention_at)) + 2
         self.out_filters = out_filters
 
         # get number of filters, target number gets div by 2 every layer
@@ -22,10 +22,10 @@ class Encoder(nn.Module):
         filters.extend([self.out_filters // (2 ** i) for i in range(self.depth-1, 0, -1)])
         filters.append(self.out_filters)
 
-        temps = [True if i > 1 else False for i in range(init_temp, 0, -1)]
+        temps = [True if i > 2 else False for i in range(init_temp, 0, -1)] # was going from 2
         temps = temps + [False for i in range(self.depth - len(temps))]
 
-        self.linear = nn.Linear(4 * 4 * out_filters, hidden_dim, bias=True)
+        self.linear = nn.Linear(2 * 4 * 4 * out_filters, hidden_dim, bias=True)
 
         if residual:
             self.down_stack = nn.ModuleList([layers.ResidualNormConv3D(c_in=filters[i], c_out=filters[i + 1],
@@ -47,7 +47,7 @@ class Encoder(nn.Module):
             if i == self.att_idx:
                 x, attn = self.attention(x)
             x = self.down_stack[i](x)
-        x = x.reshape((-1, 4 * 4 * self.out_filters))
+        x = x.reshape((-1, 2 * 4 * 4 * self.out_filters))
         x = self.linear(x)
         return x, attn
 

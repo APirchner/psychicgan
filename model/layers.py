@@ -168,7 +168,7 @@ class SelfAttentionND(nn.Module):
         res = res.view(input_size[0], self.c_inter2 , *input_size[2:])
         res = self.container["att_conv"](res)
 
-        #print(input.shape,res.shape)
+        #print(attn_out.shape)
         #import pdb; pdb.set_trace()
         out = input + res
         return out, attn_out
