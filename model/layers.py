@@ -130,6 +130,9 @@ class SelfAttentionND(nn.Module):
         self.c_inter = c_in // 8
         self.c_inter_value = c_in // 2
 
+        # trainable attention mix parameter
+        self.gamma = nn.Parameter(data=torch.zeros(1, dtype=torch.float32))
+
         self.container = nn.ModuleDict({
             'query_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
                                      kernel_size=1, stride=1, bias=True, norm=norm),
@@ -174,7 +177,7 @@ class SelfAttentionND(nn.Module):
         res = res.view(input_size[0], self.c_inter_value, *input_size[2:])
         res = self.container['att_conv'](res)
 
-        out = input + res
+        out = input + self.gamma * res
         return out, res
 
 

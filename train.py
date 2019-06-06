@@ -36,7 +36,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
     parser.add_argument('-l', '--lr_generator', type=float, default=5e-5, help='The generator learning rate')
     parser.add_argument('-m', '--lr_encoder', type=float, default=5e-5, help='The encoder learning rate')
-    parser.add_argument('-n', '--lr_discriminator', type=float, default=1e-4, help='The discriminator learning rate')
+    parser.add_argument('-n', '--lr_discriminator', type=float, default=2e-4, help='The discriminator learning rate')
     # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_true', help='Disable CUDA')
 
