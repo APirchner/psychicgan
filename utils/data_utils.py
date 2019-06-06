@@ -60,7 +60,7 @@ class KITTIData(data.Dataset):
 
 def transform_dataset(block_in, block_out, overlap, path_old):
     path_up = os.path.normpath(path_old + os.sep + os.pardir)
-    path_new = os.path.join(path_up, "in_%d_out_%d_ol_%d_skips" % (block_in, block_out, overlap))
+    path_new = os.path.join(path_up, "in_%d_out_%d_ol_%d" % (block_in, block_out, overlap))
     os.mkdir(path_new)
 
     to_tensor = transforms.ToTensor()
@@ -90,16 +90,17 @@ def transform_dataset(block_in, block_out, overlap, path_old):
             new_set = os.path.join(path_new, '%05d' % sets)
             os.mkdir(new_set)
             sets += 1
-            for idx in range(start, start + 2*(block_in + block_out), 2):
+            for idx in range(start, start + (block_in + block_out)):
                 new_img = imgs[idx].crop(box).resize((64, 64))
                 new_img.save(os.path.join(new_set, '%02d.png' % idx))
+            '''
             new_set = os.path.join(path_new, '%05d' % sets)
             os.mkdir(new_set)
             sets += 1
             for idx in range(start+1, start + 2*(block_in + block_out) + 1, 2):
                 new_img = imgs[idx].crop(box).resize((64, 64))
                 new_img.save(os.path.join(new_set, '%02d.png' % idx))
-
+            '''
 
 def generate_boxes(locs, leng, heig, max_y, b_in, b_out, b_ol):
     boxes = []
@@ -111,7 +112,7 @@ def generate_boxes(locs, leng, heig, max_y, b_in, b_out, b_ol):
         b_top = b_bottom - 128
     
     idx = 0
-    while idx + 2*(b_in + b_out - b_ol) < len(locs):
+    while idx + (b_in + b_out - b_ol) < len(locs):
         if locs[idx] < locs[-1]:  # going from left to right
             b_left = max(0, locs[idx].numpy() - np.random.randint(5, 20))
             b_right = b_bottom - b_top + b_left
@@ -126,5 +127,5 @@ def generate_boxes(locs, leng, heig, max_y, b_in, b_out, b_ol):
                 b_right = b_left + b_bottom - b_top
         boxes.append((b_left, b_top, b_right, b_bottom))
         idxs.append(idx)
-        idx += 2*(b_in + b_out - b_ol)
+        idx += (b_in + b_out - b_ol)
     return boxes, idxs
