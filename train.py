@@ -34,9 +34,9 @@ if __name__ == '__main__':
     # optimizer args
     parser.add_argument('-e', '--epochs', type=int, default=20, help='The number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
-    parser.add_argument('-l', '--lr_generator', type=float, default=5e-5, help='The generator learning rate')
-    parser.add_argument('-m', '--lr_encoder', type=float, default=5e-5, help='The encoder learning rate')
-    parser.add_argument('-n', '--lr_discriminator', type=float, default=2e-4, help='The discriminator learning rate')
+    parser.add_argument('-l', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
+    parser.add_argument('-m', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
+    parser.add_argument('-n', '--lr_discriminator', type=float, default=4e-4, help='The discriminator learning rate')
     # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_true', help='Disable CUDA')
 
@@ -56,36 +56,41 @@ if __name__ == '__main__':
     train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=16)
     val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=1)
 
-    disc_loss_fun = nn.BCEWithLogitsLoss()
-    gen_loss_fun = nn.MSELoss()
+    # training objectives
+    disc_loss_fun = nn.BCEWithLogitsLoss()  # true-fake loss for discriminator
+    gen_loss_fun = nn.MSELoss()  # feature matching loss for generator/encoder
 
+    # encoder setup
     encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=128, filters=[32, 64, 128, 256],
-                      attention_at=None, norm=None, residual=True)
+                      attention_at=None, norm=nn.utils.weight_norm, residual=True)
     encoder = encoder.to(device)
-    encoder_optim = optim.Adam(encoder.parameters(), betas=(0.5, 0.999))
-
-    generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=128,
-                          filters=[256, 128, 64, 32], attention_at=32, norm=None)
-    generator = generator.to(device)
-    generator_optim = optim.Adam(generator.parameters(), betas=(0.5, 0.999))
-
-    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128,
-                                filters=[32, 64, 128, 256], attention_at=32, norm=None)
-    discriminator = discriminator.to(device)
-    discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.9, 0.999))
-
     encoder.apply(weight_init)
-    generator.apply(weight_init)
-    discriminator.apply(weight_init)
+    encoder_optim = optim.Adam(encoder.parameters(), betas=(0.0, 0.9))
 
+    # generator setup
+    generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=128,
+                          filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.weight_norm)
+    generator = generator.to(device)
+    generator.apply(weight_init)
+    generator_optim = optim.Adam(generator.parameters(), betas=(0.0, 0.9))
+
+    # discriminator setup
+    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128,
+                                filters=[32, 64, 128, 256], attention_at=None, norm=nn.utils.weight_norm)
+    discriminator = discriminator.to(device)
+    discriminator.apply(weight_init)
+    discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.0, 0.9))
+
+    # print model summaries
     summary(encoder, input_size=(3, args.ins, 64, 64))
     summary(generator, input_size=(128,))
     summary(discriminator, input_size=(3, args.ins, 64, 64))
 
+    # tensorboard log writer
     tb_witer = SummaryWriter(log_dir='/home/andreas/Documents/msc_info/sem_2/adl4cv/runs')
 
+    # training loop
     global_step = 0
-
     for epoch in range(args.epochs):
         disc_running_loss_real = 0.0
         disc_running_loss_gen = 0.0
@@ -98,8 +103,8 @@ if __name__ == '__main__':
 
             # target for discriminator training
             batch_size = in_frames.shape[0]
-            y_real = torch.ones((batch_size,1), dtype=torch.float32).to(device)
-            y_gen = torch.zeros((batch_size,1), dtype=torch.float32).to(device)
+            y_real = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
+            y_gen = torch.zeros((batch_size, 1), dtype=torch.float32).to(device)
 
             # zero the parameter gradients
             encoder_optim.zero_grad()

@@ -37,13 +37,13 @@ class Discrimator(nn.Module):
             if residual:
                 self.down_stack.append(layers.ResidualNormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                                  activation_fun=nn.LeakyReLU(0.02),
-                                                                 batchnorm=False,
+                                                                 batchnorm=True if i < self.depth - 1 else False,
                                                                  down_spatial=True, down_temporal=temps[i])
                                        )
             else:
                 self.down_stack.append(layers.NormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                          activation_fun=nn.LeakyReLU(0.02),
-                                                         batchnorm=False,
+                                                         batchnorm=True if i < self.depth - 1 else False,
                                                          down_spatial=True, down_temporal=temps[i])
                                        )
         self.down_stack = nn.ModuleList(self.down_stack)
