@@ -35,8 +35,8 @@ if __name__ == '__main__':
     # optimizer args
     parser.add_argument('-e', '--epochs', type=int, default=20, help='The number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
-    parser.add_argument('-l', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
-    parser.add_argument('-m', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
+    parser.add_argument('-l', '--lr_generator', type=float, default=5e-5, help='The generator learning rate')
+    parser.add_argument('-m', '--lr_encoder', type=float, default=5e-5, help='The encoder learning rate')
     parser.add_argument('-n', '--lr_discriminator', type=float, default=4e-4, help='The discriminator learning rate')
     # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_true', help='Disable CUDA')
@@ -95,8 +95,8 @@ if __name__ == '__main__':
     for epoch in range(args.epochs):
         disc_running_loss = 0.0
         gen_running_loss = 0.0
-        disc_running_real_acc = 0.0
-        disc_running_gen_acc = 0.0
+        disc_running_acc_real = 0.0
+        disc_running_acc_gen = 0.0
         for i, data in enumerate(train_loader, 0):
             # get the inputs and move them to device
             in_frames, out_frames = data
@@ -124,8 +124,9 @@ if __name__ == '__main__':
             disc_loss_gen = disc_loss_fun(logits_gen, y_gen)
 
             # real-fake accuracy
-            disc_acc_real = torch.sum(torch.sigmoid(logits_real) > 0.5, dtype=torch.float32) / logits_real.shape[0]
-            disc_acc_gen = torch.sum(torch.sigmoid(logits_gen) < 0.5, dtype=torch.float32) / logits_gen.shape[0]
+            test = (torch.sigmoid(logits_real.squeeze()) > 0.5).float()
+            disc_acc_real = torch.mean((torch.sigmoid(logits_real.squeeze()) > 0.5).float())
+            disc_acc_gen = torch.mean((torch.sigmoid(logits_gen.squeeze()) <= 0.5).float())
 
             disc_loss = (disc_loss_real + disc_loss_gen) / 2
             disc_loss.backward()
@@ -148,19 +149,25 @@ if __name__ == '__main__':
             # print statistics
             disc_running_loss += disc_loss.item()
             gen_running_loss += gen_loss.item()
-            disc_running_real_acc += disc_acc_real
-            disc_running_gen_acc += disc_acc_gen
+            disc_running_acc_real += disc_acc_real.item()
+            disc_running_acc_gen += disc_acc_gen.item()
             if i % 10 == 9:
-                print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3}'.format(
-                    epoch, i, round(disc_running_loss / 10, 4), round(gen_running_loss / 10, 4)))
+                print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3} | Accuracy: (R) {4} - (G) {5}'.format(
+                    epoch, i, round(disc_running_loss / 10, 4), round(gen_running_loss / 10, 4),
+                    round(disc_running_acc_real / 10, 4), round(disc_running_acc_gen / 10, 4)))
                 tb_writer.add_scalar('D_loss_real', disc_running_loss / 10, global_step=global_step)
                 tb_writer.add_scalar('D_loss_gen', disc_running_loss / 10, global_step=global_step)
                 tb_writer.add_scalar('G_loss', gen_running_loss / 10, global_step=global_step)
-                tb_writer.add_scalar('D_acc_real', disc_running_real_acc / 10, global_step=global_step)
-                tb_writer.add_scalar('D_acc_gen', disc_running_gen_acc / 10, global_step=global_step)
+                tb_writer.add_scalar('D_acc_real', disc_running_acc_real / 10, global_step=global_step)
+                tb_writer.add_scalar('D_acc_gen', disc_running_acc_gen / 10, global_step=global_step)
                 # log generated images
                 gen_imgs = torchvision.utils.make_grid(generated.squeeze())
                 tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
+
+                disc_running_loss = 0.0
+                gen_running_loss = 0.0
+                disc_running_acc_real = 0.0
+                disc_running_acc_gen = 0.0
 
             global_step += 1
 
