@@ -36,13 +36,13 @@ class Generator(nn.Module):
             self.up_stack.append(layers.NormUpsample3D(
                 c_in=self.filters[i], c_out=self.filters[i + 1],
                 out_size=out_sizes[i],
-                batchnorm=True if i < self.depth - 1 else False,
+                batchnorm=True,
                 activation_fun=nn.LeakyReLU(0.2) if i < self.depth - 1 else nn.Tanh()
             )
             )
         self.up_stack = nn.ModuleList(self.up_stack)
 
-        self.attention = layers.SelfAttention3D(norm, c_in=self.filters[self.att_idx])\
+        self.attention = layers.SelfAttention3D(norm, c_in=self.filters[self.att_idx]) \
             if attention_at is not None else None
 
     def forward(self, input):

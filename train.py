@@ -31,6 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dir', type=str, required=True, help='The data directory')
     parser.add_argument('-i', '--ins', type=int, required=True, help='The number of conditioning frames')
     parser.add_argument('-o', '--outs', type=int, required=True, help='The number of generated frames')
+    parser.add_argument('-z', '--latent_dim', type=int, default=128, help='The dimension of the latent frame encoding')
     # optimizer args
     parser.add_argument('-e', '--epochs', type=int, default=20, help='The number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
@@ -61,25 +62,25 @@ if __name__ == '__main__':
     gen_loss_fun = nn.MSELoss()  # feature matching loss for generator/encoder
 
     # encoder setup
-    encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=128, filters=[32, 64, 128, 256],
+    encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=args.latent_dim, filters=[32, 64, 64, 128],
                       attention_at=None, norm=nn.utils.weight_norm, residual=True)
     encoder = encoder.to(device)
     encoder.apply(weight_init)
-    encoder_optim = optim.Adam(encoder.parameters(), betas=(0.0, 0.9))
+    encoder_optim = optim.Adam(encoder.parameters(), lr=args.lr_encoder, betas=(0.0, 0.9))
 
     # generator setup
-    generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=128,
+    generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=args.latent_dim,
                           filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.weight_norm)
     generator = generator.to(device)
     generator.apply(weight_init)
-    generator_optim = optim.Adam(generator.parameters(), betas=(0.0, 0.9))
+    generator_optim = optim.Adam(generator.parameters(), lr=args.lr_generator, betas=(0.0, 0.9))
 
     # discriminator setup
-    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128,
-                                filters=[32, 64, 128, 256], attention_at=None, norm=nn.utils.weight_norm)
+    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128, filters=[32, 64, 64, 128],
+                                attention_at=None, norm=nn.utils.weight_norm, residual=True)
     discriminator = discriminator.to(device)
     discriminator.apply(weight_init)
-    discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.0, 0.9))
+    discriminator_optim = optim.Adam(discriminator.parameters(), lr=args.lr_discriminator, betas=(0.0, 0.9))
 
     # print model summaries
     summary(encoder, input_size=(3, args.ins, 64, 64))
@@ -87,13 +88,12 @@ if __name__ == '__main__':
     summary(discriminator, input_size=(3, args.ins, 64, 64))
 
     # tensorboard log writer
-    tb_witer = SummaryWriter(log_dir='/home/andreas/Documents/msc_info/sem_2/adl4cv/runs')
+    tb_writer = SummaryWriter(log_dir='/home/andreas/Documents/msc_info/sem_2/adl4cv/runs')
 
     # training loop
     global_step = 0
     for epoch in range(args.epochs):
-        disc_running_loss_real = 0.0
-        disc_running_loss_gen = 0.0
+        disc_running_loss = 0.0
         gen_running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             # get the inputs and move them to device
@@ -112,22 +112,19 @@ if __name__ == '__main__':
             discriminator.zero_grad()
 
             # DISCRIMINATOR TRAINING
-            with torch.no_grad():  # fix generator/encoder
-                hidden, _ = encoder(in_frames)
-                generated, _ = generator(hidden)
+            hidden, _ = encoder(in_frames)
+            generated, _ = generator(hidden)
             _, logits_real, _ = discriminator(out_frames)
-            _, logits_gen, _ = discriminator(generated)
+            _, logits_gen, _ = discriminator(generated.detach())
             # loss on real batch
             disc_loss_real = disc_loss_fun(logits_real, y_real)
-            disc_loss_real.backward()
             # loss on fake batch
             disc_loss_gen = disc_loss_fun(logits_gen, y_gen)
-            disc_loss_gen.backward()
+
+            disc_loss = (disc_loss_real + disc_loss_gen) / 2
+            disc_loss.backward()
 
             discriminator_optim.step()
-
-            tb_witer.add_scalar('D_loss_real', disc_loss_real.item(), global_step=global_step)
-            tb_witer.add_scalar('D_loss_gen', disc_loss_gen.item(), global_step=global_step)
 
             # GENERATOR/ENCODER TRAINING
             hidden, encoder_attn = encoder(in_frames)
@@ -139,21 +136,21 @@ if __name__ == '__main__':
             gen_loss = gen_loss_fun(torch.mean(features_real, dim=0), torch.mean(features_gen, dim=0))
             gen_loss.backward()
 
-            tb_witer.add_scalar('GE_loss', gen_loss.item(), global_step=global_step)
-
             encoder_optim.step()
             generator_optim.step()
 
             # print statistics
-            disc_running_loss_real += disc_loss_real.item()
-            disc_running_loss_gen += disc_loss_gen.item()
+            disc_running_loss += disc_loss.item()
             gen_running_loss += gen_loss.item()
             if i % 10 == 9:
-                print('[Epoch {0} - Step {1}] Loss: (D real) {2} / (D gen) {3} - (G) {4}'.format(
-                    epoch, i, disc_running_loss_real / 10, disc_running_loss_gen / 10, gen_running_loss / 10))
+                print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3}'.format(
+                    epoch, i, disc_running_loss / 10, gen_running_loss / 10))
+                tb_writer.add_scalar('D_loss_real', disc_running_loss / 10, global_step=global_step)
+                tb_writer.add_scalar('D_loss_gen', disc_running_loss / 10, global_step=global_step)
+                tb_writer.add_scalar('G_loss', gen_running_loss / 10, global_step=global_step)
                 # log generated images
                 gen_imgs = torchvision.utils.make_grid(generated.squeeze())
-                tb_witer.add_image('G_imgs', gen_imgs, global_step=global_step)
+                tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
 
             global_step += 1
 
