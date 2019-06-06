@@ -76,7 +76,7 @@ if __name__ == '__main__':
     generator_optim = optim.Adam(generator.parameters(), lr=args.lr_generator, betas=(0.0, 0.9))
 
     # discriminator setup
-    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128, filters=[32, 64, 64, 128],
+    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128, filters=[32, 32, 64, 64],
                                 attention_at=None, norm=nn.utils.weight_norm, residual=True)
     discriminator = discriminator.to(device)
     discriminator.apply(weight_init)
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     # print model summaries
     summary(encoder, input_size=(3, args.ins, 64, 64))
-    summary(generator, input_size=(128,))
+    summary(generator, input_size=(args.latent_dim,))
     summary(discriminator, input_size=(3, args.ins, 64, 64))
 
     # tensorboard log writer
@@ -95,6 +95,8 @@ if __name__ == '__main__':
     for epoch in range(args.epochs):
         disc_running_loss = 0.0
         gen_running_loss = 0.0
+        disc_running_real_acc = 0.0
+        disc_running_gen_acc = 0.0
         for i, data in enumerate(train_loader, 0):
             # get the inputs and move them to device
             in_frames, out_frames = data
@@ -121,6 +123,10 @@ if __name__ == '__main__':
             # loss on fake batch
             disc_loss_gen = disc_loss_fun(logits_gen, y_gen)
 
+            # real-fake accuracy
+            disc_acc_real = torch.sum(torch.sigmoid(logits_real) > 0.5, dtype=torch.float32) / logits_real.shape[0]
+            disc_acc_gen = torch.sum(torch.sigmoid(logits_gen) < 0.5, dtype=torch.float32) / logits_gen.shape[0]
+
             disc_loss = (disc_loss_real + disc_loss_gen) / 2
             disc_loss.backward()
 
@@ -142,12 +148,16 @@ if __name__ == '__main__':
             # print statistics
             disc_running_loss += disc_loss.item()
             gen_running_loss += gen_loss.item()
+            disc_running_real_acc += disc_acc_real
+            disc_running_gen_acc += disc_acc_gen
             if i % 10 == 9:
                 print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3}'.format(
-                    epoch, i, disc_running_loss / 10, gen_running_loss / 10))
+                    epoch, i, round(disc_running_loss / 10, 4), round(gen_running_loss / 10, 4)))
                 tb_writer.add_scalar('D_loss_real', disc_running_loss / 10, global_step=global_step)
                 tb_writer.add_scalar('D_loss_gen', disc_running_loss / 10, global_step=global_step)
                 tb_writer.add_scalar('G_loss', gen_running_loss / 10, global_step=global_step)
+                tb_writer.add_scalar('D_acc_real', disc_running_real_acc / 10, global_step=global_step)
+                tb_writer.add_scalar('D_acc_gen', disc_running_gen_acc / 10, global_step=global_step)
                 # log generated images
                 gen_imgs = torchvision.utils.make_grid(generated.squeeze())
                 tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
