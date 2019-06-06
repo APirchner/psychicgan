@@ -60,19 +60,19 @@ if __name__ == '__main__':
     gen_loss_fun = nn.MSELoss()
 
     encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=128, filters=[32, 64, 128, 256],
-                      attention_at=8, norm=nn.utils.weight_norm, residual=True)
+                      attention_at=None, norm=None, residual=True)
     encoder = encoder.to(device)
     encoder_optim = optim.Adam(encoder.parameters(), betas=(0.5, 0.999))
 
     generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=128,
-                          filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.weight_norm)
+                          filters=[256, 128, 64, 32], attention_at=32, norm=None)
     generator = generator.to(device)
     generator_optim = optim.Adam(generator.parameters(), betas=(0.5, 0.999))
 
     discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128,
-                                filters=[32, 64, 128, 256], attention_at=8, norm=nn.utils.weight_norm)
+                                filters=[32, 64, 128, 256], attention_at=32, norm=None)
     discriminator = discriminator.to(device)
-    discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.5, 0.999))
+    discriminator_optim = optim.Adam(discriminator.parameters(), betas=(0.9, 0.999))
 
     encoder.apply(weight_init)
     generator.apply(weight_init)
@@ -98,8 +98,8 @@ if __name__ == '__main__':
 
             # target for discriminator training
             batch_size = in_frames.shape[0]
-            y_real = torch.ones((batch_size,), dtype=torch.float32).to(device)
-            y_gen = torch.zeros((batch_size,), dtype=torch.float32).to(device)
+            y_real = torch.ones((batch_size,1), dtype=torch.float32).to(device)
+            y_gen = torch.zeros((batch_size,1), dtype=torch.float32).to(device)
 
             # zero the parameter gradients
             encoder_optim.zero_grad()
@@ -146,8 +146,7 @@ if __name__ == '__main__':
             if i % 10 == 9:
                 print('[Epoch {0} - Step {1}] Loss: (D real) {2} / (D gen) {3} - (G) {4}'.format(
                     epoch, i, disc_running_loss_real / 10, disc_running_loss_gen / 10, gen_running_loss / 10))
-            # log generated images
-            if i % 10 == 9:
+                # log generated images
                 gen_imgs = torchvision.utils.make_grid(generated.squeeze())
                 tb_witer.add_image('G_imgs', gen_imgs, global_step=global_step)
 

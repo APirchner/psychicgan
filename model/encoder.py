@@ -10,7 +10,7 @@ class Encoder(nn.Module):
                  norm=nn.utils.weight_norm, residual=True):
         super(Encoder, self).__init__()
         # check if spatial frame dim is power of 2
-        assert not frame_dim & (frame_dim - 1) and not attention_at & (attention_at - 1)
+        assert not frame_dim & (frame_dim - 1)
 
         # check if initial temp dim is larger than target temp dim
         assert init_temp >= target_temp
@@ -22,7 +22,7 @@ class Encoder(nn.Module):
         assert len(filters) == self.depth
 
         # get position of attention layer
-        self.att_idx = self.depth - int(np.log2(attention_at)) + 2
+        self.att_idx = self.depth - int(np.log2(attention_at)) + 2 if attention_at is not None else None
 
         self.target_temp = target_temp
 
@@ -53,14 +53,15 @@ class Encoder(nn.Module):
 
         self.down_stack = nn.ModuleList(self.down_stack)
 
-        self.attention = layers.SelfAttention3D(norm, c_in=self.filters[self.att_idx])
+        self.attention = layers.SelfAttention3D(norm, c_in=self.filters[self.att_idx]) \
+            if attention_at is not None else None
 
     def forward(self, input):
         attn = None
         x = input
         for i in range(len(self.down_stack)):
             # include attention layer at chosen depth
-            if i == self.att_idx:
+            if self.att_idx is not None and i == self.att_idx:
                 x, attn = self.attention(x)
             x = self.down_stack[i](x)
         x = x.reshape((-1, self.target_temp * 4 * 4 * self.filters[-1]))

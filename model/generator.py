@@ -8,7 +8,7 @@ class Generator(nn.Module):
                  norm=nn.utils.weight_norm):
         super(Generator, self).__init__()
         # check if spatial frame dim is power of 2
-        assert not frame_dim & (frame_dim - 1) and not attention_at & (attention_at - 1)
+        assert not frame_dim & (frame_dim - 1)
 
         # go from 2^2 up to 2^n
         self.depth = int(np.log2(frame_dim)) - 2
@@ -17,7 +17,7 @@ class Generator(nn.Module):
         assert len(filters) == self.depth
 
         # get position of attention layer
-        self.att_idx = int(np.log2(attention_at)) - 2
+        self.att_idx = int(np.log2(attention_at)) - 2 if attention_at is not None else None
 
         self.filters = filters
         # last layer outputs 3 channels for RGB
@@ -42,7 +42,8 @@ class Generator(nn.Module):
             )
         self.up_stack = nn.ModuleList(self.up_stack)
 
-        self.attention = layers.SelfAttention3D(norm, c_in=self.filters[self.att_idx])
+        self.attention = layers.SelfAttention3D(norm, c_in=self.filters[self.att_idx])\
+            if attention_at is not None else None
 
     def forward(self, input):
         attn = None
@@ -50,7 +51,7 @@ class Generator(nn.Module):
         x = x.reshape((-1, self.filters[0], 1, 4, 4))
         for i in range(len(self.up_stack)):
             # include attention layer at chosen depth
-            if i == self.att_idx:
+            if self.att_idx is not None and i == self.att_idx:
                 x, attn = self.attention(x)
             x = self.up_stack[i](x)
         return x, attn
