@@ -47,7 +47,7 @@ class Discrimator(nn.Module):
                                                          batchnorm=True if i > 0 else False,
                                                          down_spatial=True, down_temporal=temps[i])
                                        )
-            self.drop_stack.append(nn.Dropout3d(p=0.25))
+            self.drop_stack.append(nn.Dropout3d(p=0.4))
 
         self.down_stack = nn.ModuleList(self.down_stack)
         self.drop_stack = nn.ModuleList(self.drop_stack)

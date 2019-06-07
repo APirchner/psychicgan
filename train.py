@@ -35,8 +35,8 @@ if __name__ == '__main__':
     # optimizer args
     parser.add_argument('-e', '--epochs', type=int, default=20, help='The number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
-    parser.add_argument('-l', '--lr_generator', type=float, default=5e-5, help='The generator learning rate')
-    parser.add_argument('-m', '--lr_encoder', type=float, default=5e-5, help='The encoder learning rate')
+    parser.add_argument('-l', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
+    parser.add_argument('-m', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
     parser.add_argument('-n', '--lr_discriminator', type=float, default=4e-4, help='The discriminator learning rate')
     # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_true', help='Disable CUDA')
@@ -62,22 +62,22 @@ if __name__ == '__main__':
     gen_loss_fun = nn.MSELoss()  # feature matching loss for generator/encoder
 
     # encoder setup
-    encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=args.latent_dim, filters=[32, 64, 64, 128],
-                      attention_at=None, norm=nn.utils.weight_norm, residual=True)
+    encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
+                      attention_at=None, norm=nn.utils.spectral_norm, residual=True)
     encoder = encoder.to(device)
     encoder.apply(weight_init)
     encoder_optim = optim.Adam(encoder.parameters(), lr=args.lr_encoder, betas=(0.0, 0.9))
 
     # generator setup
     generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=args.latent_dim,
-                          filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.weight_norm)
+                          filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
     generator = generator.to(device)
     generator.apply(weight_init)
     generator_optim = optim.Adam(generator.parameters(), lr=args.lr_generator, betas=(0.0, 0.9))
 
     # discriminator setup
-    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128, filters=[32, 32, 64, 64],
-                                attention_at=None, norm=nn.utils.weight_norm, residual=True)
+    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128, filters=[16, 32, 64, 128],
+                                attention_at=32, norm=nn.utils.spectral_norm, residual=True)
     discriminator = discriminator.to(device)
     discriminator.apply(weight_init)
     discriminator_optim = optim.Adam(discriminator.parameters(), lr=args.lr_discriminator, betas=(0.0, 0.9))
@@ -105,8 +105,8 @@ if __name__ == '__main__':
 
             # target for discriminator training
             batch_size = in_frames.shape[0]
-            y_real = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
-            y_gen = torch.zeros((batch_size, 1), dtype=torch.float32).to(device)
+            y_gen = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
+            y_real = torch.zeros((batch_size, 1), dtype=torch.float32).to(device)
 
             # zero the parameter gradients
             encoder_optim.zero_grad()
@@ -124,9 +124,8 @@ if __name__ == '__main__':
             disc_loss_gen = disc_loss_fun(logits_gen, y_gen)
 
             # real-fake accuracy
-            test = (torch.sigmoid(logits_real.squeeze()) > 0.5).float()
-            disc_acc_real = torch.mean((torch.sigmoid(logits_real.squeeze()) > 0.5).float())
-            disc_acc_gen = torch.mean((torch.sigmoid(logits_gen.squeeze()) <= 0.5).float())
+            disc_acc_real = torch.mean((torch.sigmoid(logits_real.squeeze()) <= 0.5).float())
+            disc_acc_gen = torch.mean((torch.sigmoid(logits_gen.squeeze()) > 0.5).float())
 
             disc_loss = (disc_loss_real + disc_loss_gen) / 2
             disc_loss.backward()
