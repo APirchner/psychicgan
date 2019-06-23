@@ -96,23 +96,22 @@ if __name__ == '__main__':
         generator_optim = optim.RMSprop(generator.parameters(), lr=args.lr_generator)
         discriminator_optim = optim.RMSprop(discriminator.parameters(), lr=args.lr_discriminator)
 
+        encoder_sched = optim.lr_scheduler.ExponentialLR(encoder_optim, gamma=0.99)
+        generator_sched = optim.lr_scheduler.ExponentialLR(generator_optim, gamma=0.99)
+        discriminator_sched = optim.lr_scheduler.ExponentialLR(discriminator_optim, gamma=0.99)
+
         one = torch.FloatTensor([1]).to(device)
         m_one = -1 * one
-
-        train_iter = iter(train_loader)
 
         global_step = 0
         for epoch in range(args.epochs):
             i = 0
-            disc_running_loss = 0.0
-            gen_running_loss = 0.0
-            disc_running_acc_real = 0.0
-            disc_running_acc_gen = 0.0
+            train_iter = iter(train_loader)
 
             while i < len(train_loader):
                 j = 0
-                while j < 5 and i < len(train_loader):
-                    # do 5 discriminator steps for each encoder/generator step -> see WGAAN paper
+                while j < 5 and i < len(train_loader) - 1:
+                    # do 5 discriminator steps for each encoder/generator step -> see WGAN paper
                     # get the inputs and move them to device
                     data = next(train_iter)
                     in_frames, out_frames = data
@@ -134,11 +133,12 @@ if __name__ == '__main__':
                     err_real = out_real.mean(0).view(1)
                     err_gen = out_gen.mean(0).view(1)
 
-                    err_real.backward(one)
-                    err_gen.backward(m_one)
+                    err_real.backward(m_one)
+                    err_gen.backward(one)
                     err_D = err_real + err_gen
                     discriminator_optim.step()
                     j += 1
+                    i += 1
 
                 # GENERATOR/ENCODER TRAINING
                 data = next(train_iter)
@@ -154,8 +154,23 @@ if __name__ == '__main__':
                 generated, generator_attn = generator(hidden)
 
                 _, out_gen, _ = discriminator(generated)
-                out_gen.backward(one)
+                err_G = out_gen.mean(0).view(1)
+                err_G.backward(one)
+                generator_optim.step()
+                encoder_optim.step()
                 i += 1
+
+                # print statistics
+                if global_step % 10 == 9:
+                    print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3}'.format(
+                        epoch, global_step, round(err_D.item(), 4), round(err_G.item(), 4)))
+                    tb_writer.add_scalar('D_loss', err_D.item(), global_step=global_step)
+                    tb_writer.add_scalar('G_loss', err_G.item(), global_step=global_step)
+                    # log generated images
+                    gen_imgs = torchvision.utils.make_grid(generated.squeeze())
+                    tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
+
+                global_step += 1
 
 
     else:

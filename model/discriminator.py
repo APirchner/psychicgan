@@ -28,8 +28,9 @@ class Discrimator(nn.Module):
         temps = [True if i > 1 else False for i in range(init_temp, 0, -1)]
         temps = temps + [False for _ in range(self.depth - len(temps))]
 
-        self.linear = nn.Linear(self.filters[-1], feature_dim, bias=True)
-        self.logits = nn.Linear(feature_dim, 1, bias=True)
+        self.linear = layers.NormLinear(c_in=self.filters[-1], c_out=feature_dim,
+                                        norm=norm, use_bias=True, batchnorm=False)
+        self.logits = layers.NormLinear(c_in=feature_dim, c_out=1, norm=norm, use_bias=True, batchnorm=False)
 
         self.down_stack = []
         self.drop_stack = []

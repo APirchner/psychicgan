@@ -28,7 +28,8 @@ class Generator(nn.Module):
         temp_sizes = [i if i < temporal_target else temporal_target for i in range(2, self.depth + 2)]
         out_sizes = [(temp_sizes[i], 2 ** (i + 3), 2 ** (i + 3)) for i in range(self.depth)]
 
-        self.linear = nn.Linear(hidden_dim, 4 * 4 * self.filters[0], bias=True)
+        self.linear = layers.NormLinear(c_in=hidden_dim, c_out=4 * 4 * self.filters[0],
+                                        norm=norm, use_bias=True, batchnorm=True)
 
         self.up_stack = []
 

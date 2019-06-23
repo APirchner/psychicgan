@@ -234,7 +234,7 @@ class ResidualNormConv3D(nn.Module):
                                 bias, nn.BatchNorm3d(c_out) if batchnorm else None, norm, activation_fun, 1)
         # residual pass 1x1 convolution to match filter number
         self.layer_res = NormConvND(nn.Conv3d, c_in, c_out, 1, 1,
-                                  bias, nn.BatchNorm3d(c_out) if batchnorm else None, norm, None, 0)
+                                    bias, nn.BatchNorm3d(c_out) if batchnorm else None, norm, None, 0)
 
     def forward(self, input):
         in_shape = list(input.shape)
@@ -325,3 +325,26 @@ class SelfAttention2D(nn.Module):
     def forward(self, input):
         x, attention_mask = self.layer(input)
         return x, attention_mask
+
+
+class NormLinear(nn.Module):
+    """
+    Convenience wrapper for  a normalized linear layer
+    """
+
+    def __init__(self, c_in, c_out, activation_fun=None, batchnorm=True,
+                 norm=nn.utils.spectral_norm, use_bias=True):
+        super(NormLinear, self).__init__()
+        self.container = nn.ModuleDict({
+            'linear': norm(
+                nn.Linear(in_features=c_in, out_features=c_out, bias=use_bias)
+            ) if norm is not None else nn.Linear(in_features=c_in, out_features=c_out, bias=use_bias),
+            'batchnorm': nn.BatchNorm1d(c_out) if batchnorm else None,
+            'activation': activation_fun
+        })
+
+    def forward(self, input):
+        x = self.container['linear'](input)
+        x = self.container['batchnorm'](x) if self.container['batchnorm'] is not None else x
+        x = self.container['activation'](x) if self.container['activation'] is not None else x
+        return x
