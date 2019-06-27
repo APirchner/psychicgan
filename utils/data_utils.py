@@ -79,6 +79,7 @@ class UCF101Data(data.Dataset):
             success,image = vidcap.read()
             # switch R and B (cv2 - BGR, normal - RGB)
             image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image[:,40:280,:],(64,64))
             imgs.append(image)
             
         for k in frame_idx[self.block_in:]:
@@ -86,15 +87,16 @@ class UCF101Data(data.Dataset):
             success,image = vidcap.read()
             # switch R and B (cv2 - BGR, normal - RGB)
             image = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image[:,40:280,:],(64,64))
             targets.append(image)
+            
+        to_tensor = transforms.ToTensor()
 
-        imgs = [torch.from_numpy(x).permute(2,0,1) for x in imgs]
+        imgs = [to_tensor(x)*2-1 for x in imgs]
         imgs = torch.stack(imgs, dim=1)
 
-        targets = [torch.from_numpy(x).permute(2,0,1) for x in targets]
+        targets = [to_tensor(x)*2-1 for x in targets]
         targets = torch.stack(targets, dim=1)
-        
-        # normalize to (-1, 1)
 
         return imgs, targets
 
