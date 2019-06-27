@@ -66,9 +66,7 @@ class UCF101Data(data.Dataset):
         frame_idx = [block_idx*self.shift]
         for k in range(self.block_in + self.block_out - 1):
             frame_idx.append(frame_idx[-1]+self.skip)
-            
-        print(block_idx,frame_idx)
-        
+
         imgs = []
         targets = []
         
