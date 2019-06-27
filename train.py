@@ -17,8 +17,10 @@ def weight_init(net):
     classname = net.__class__.__name__
     if classname.find('Conv3d') != -1:
         nn.init.normal_(net.weight.data, 0.0, 0.02)
-        if classname.find('Conv1d') != -1:
-            nn.init.normal_(net.weight.data, 0.0, 0.02)
+    elif classname.find('Conv1d') != -1:
+        nn.init.normal_(net.weight.data, 0.0, 0.02)
+    elif classname.find('Linear') != -1:
+        nn.init.normal_(net.weight.data, 0.0, 0.02)
     elif classname.find('BatchNorm') != -1:
         nn.init.normal_(net.weight.data, 1.0, 0.02)
         nn.init.constant_(net.bias.data, 0)
@@ -86,7 +88,7 @@ if __name__ == '__main__':
     summary(discriminator, input_size=(3, args.ins, 64, 64))
 
     # tensorboard log writer
-    tb_writer = SummaryWriter(log_dir='/home/andreas/Documents/msc_info/sem_2/adl4cv/runs')
+    tb_writer = SummaryWriter(log_dir='/home/ewok261/Documents/psychic/sem_2/adl4cv/runs')
 
     if args.wasserstein:
         # WASSERSTEIN GAN
@@ -133,9 +135,11 @@ if __name__ == '__main__':
                     err_real = out_real.mean(0).view(1)
                     err_gen = out_gen.mean(0).view(1)
 
-                    err_real.backward(m_one)
-                    err_gen.backward(one)
-                    err_D = err_real + err_gen
+                    loss_D = err_gen - err_real
+                    loss_D.backward()
+                    #err_real.backward(m_one)
+                    #err_gen.backward(one)
+                    #err_D = err_real + err_gen
                     discriminator_optim.step()
                     j += 1
                     i += 1
@@ -155,7 +159,10 @@ if __name__ == '__main__':
 
                 _, out_gen, _ = discriminator(generated)
                 err_G = out_gen.mean(0).view(1)
-                err_G.backward(one)
+                
+                loss_G = -err_G
+                loss_G.backward()
+                #err_G.backward(one)
                 generator_optim.step()
                 encoder_optim.step()
                 i += 1
