@@ -80,7 +80,7 @@ class NormUpsampleND(nn.Module):
      Should be a substitute for a transposed convolution.
     """
 
-    def __init__(self, conv, c_in, c_out, out_size, batchnorm=None,
+    def __init__(self, conv, c_in, c_out, out_size, bias=True, batchnorm=None,
                  activation_fun=None, norm=nn.utils.weight_norm, mode='nearest'):
         """
         :param conv: the convolution function, e.g. torch.nn.Conv2D
@@ -100,7 +100,7 @@ class NormUpsampleND(nn.Module):
             'conv': norm(conv(in_channels=c_in, out_channels=c_out, kernel_size=3,
                               stride=1, bias=False, padding=1)
                          ) if norm is not None else conv(in_channels=c_in, out_channels=c_out, kernel_size=3,
-                                                         stride=1, bias=False, padding=1),
+                                                         stride=1, bias=bias, padding=1),
             'bn': batchnorm,
             'activation': activation_fun
         })
@@ -116,7 +116,7 @@ class NormUpsampleND(nn.Module):
 class SelfAttentionND(nn.Module):
     """ N-dimensional self attention layer. N is 2 or 3. """
 
-    def __init__(self, dim, norm, c_in):
+    def __init__(self, dim, norm, c_in, bias=True):
         """
         :param dim: input dimension, either 2 or 3
         :param norm: the kind of normalization for the convolutions, e.g. torch.utils.weight_norm
@@ -135,13 +135,13 @@ class SelfAttentionND(nn.Module):
 
         self.container = nn.ModuleDict({
             'query_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
-                                     kernel_size=1, stride=1, bias=True, norm=norm),
+                                     kernel_size=1, stride=1, bias=bias, norm=norm),
             'key_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
-                                   kernel_size=1, stride=1, bias=True, norm=norm),
+                                   kernel_size=1, stride=1, bias=bias, norm=norm),
             'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter_value,
-                                     kernel_size=1, stride=1, bias=True, norm=norm),
+                                     kernel_size=1, stride=1, bias=bias, norm=norm),
             'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=self.c_inter_value, c_out=c_in,
-                                   kernel_size=1, stride=1, bias=True, norm=norm),
+                                   kernel_size=1, stride=1, bias=bias, norm=norm),
             'softmax': nn.Softmax(dim=-1)
         })
 
@@ -272,10 +272,10 @@ class NormUpsample3D(nn.Module):
     3D convenience wrapper for ND up-sample
     """
 
-    def __init__(self, c_in, c_out, out_size, batchnorm=True, activation_fun=None, norm=nn.utils.weight_norm,
+    def __init__(self, c_in, c_out, out_size, bias=True, batchnorm=True, activation_fun=None, norm=nn.utils.weight_norm,
                  mode='trilinear'):
         super(NormUpsample3D, self).__init__()
-        self.layer = NormUpsampleND(nn.Conv3d, c_in, c_out, out_size,
+        self.layer = NormUpsampleND(nn.Conv3d, c_in, c_out, out_size, bias,
                                     nn.BatchNorm3d(c_out) if batchnorm else None, activation_fun, norm, mode)
 
     def forward(self, input):
@@ -288,10 +288,10 @@ class NormUpsample2D(nn.Module):
     2D convenience wrapper for ND up-sample
     """
 
-    def __init__(self, c_in, c_out, out_size, batchnorm=True, activation_fun=None, norm=nn.utils.weight_norm,
+    def __init__(self, c_in, c_out, out_size, bias=True, batchnorm=True, activation_fun=None, norm=nn.utils.weight_norm,
                  mode='bilinear'):
         super(NormUpsample2D, self).__init__()
-        self.layer = NormUpsampleND(nn.Conv2d, c_in, c_out, out_size,
+        self.layer = NormUpsampleND(nn.Conv2d, c_in, c_out, out_size, bias,
                                     nn.BatchNorm3d(c_out) if batchnorm else None, activation_fun, norm, mode)
 
     def forward(self, input):
@@ -333,12 +333,12 @@ class NormLinear(nn.Module):
     """
 
     def __init__(self, c_in, c_out, activation_fun=None, batchnorm=True,
-                 norm=nn.utils.spectral_norm, use_bias=True):
+                 norm=nn.utils.spectral_norm, bias=True):
         super(NormLinear, self).__init__()
         self.container = nn.ModuleDict({
             'linear': norm(
-                nn.Linear(in_features=c_in, out_features=c_out, bias=use_bias)
-            ) if norm is not None else nn.Linear(in_features=c_in, out_features=c_out, bias=use_bias),
+                nn.Linear(in_features=c_in, out_features=c_out, bias=bias)
+            ) if norm is not None else nn.Linear(in_features=c_in, out_features=c_out, bias=bias),
             'batchnorm': nn.BatchNorm1d(c_out) if batchnorm else None,
             'activation': activation_fun
         })

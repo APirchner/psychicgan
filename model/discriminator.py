@@ -6,7 +6,7 @@ from model import layers
 
 
 class Discrimator(nn.Module):
-    def __init__(self, frame_dim=64, init_temp=3, feature_dim=128, filters=[64, 128, 256, 512], attention_at=8,
+    def __init__(self, frame_dim=64, init_temp=3, feature_dim=128, filters=(64, 128, 256, 512), attention_at=8,
                  norm=nn.utils.weight_norm, residual=True):
         super(Discrimator, self).__init__()
         # check if spatial frame dim is power of 2
@@ -29,8 +29,8 @@ class Discrimator(nn.Module):
         temps = temps + [False for _ in range(self.depth - len(temps))]
 
         self.linear = layers.NormLinear(c_in=self.filters[-1], c_out=feature_dim,
-                                        norm=norm, use_bias=True, batchnorm=False)
-        self.logits = layers.NormLinear(c_in=feature_dim, c_out=1, norm=norm, use_bias=True, batchnorm=False)
+                                        norm=norm, bias=True, batchnorm=False)
+        self.logits = layers.NormLinear(c_in=feature_dim, c_out=1, norm=norm, bias=True, batchnorm=False)
 
         self.down_stack = []
         self.drop_stack = []
@@ -40,12 +40,14 @@ class Discrimator(nn.Module):
                 self.down_stack.append(layers.ResidualNormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                                  activation_fun=nn.LeakyReLU(0.2),
                                                                  batchnorm=True if i > 0 else False,
+                                                                 bias=False,
                                                                  down_spatial=True, down_temporal=temps[i])
                                        )
             else:
                 self.down_stack.append(layers.NormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                          activation_fun=nn.LeakyReLU(0.2),
                                                          batchnorm=True if i > 0 else False,
+                                                         bias=False,
                                                          down_spatial=True, down_temporal=temps[i])
                                        )
             self.drop_stack.append(nn.Dropout3d(p=0.4))
