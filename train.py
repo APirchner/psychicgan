@@ -1,5 +1,9 @@
 import argparse
+import os
+import json
 
+import torch
+import torch.utils.data as data
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
@@ -7,7 +11,7 @@ import torchvision
 from torchsummary import summary
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.data_utils import *
+from utils.data_utils import UCF101Data
 from model.encoder import Encoder
 from model.generator import Generator
 from model.discriminator import Discrimator
@@ -16,14 +20,9 @@ from model.discriminator import Discrimator
 def weight_init(net):
     classname = net.__class__.__name__
     if classname.find('Conv3d') != -1:
-        nn.init.normal_(net.weight.data, 0.0, 0.02)
+        nn.init.xavier_normal_(net.weight.data)
     elif classname.find('Conv1d') != -1:
-        nn.init.normal_(net.weight.data, 0.0, 0.02)
-    elif classname.find('Linear') != -1:
-        nn.init.normal_(net.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(net.weight.data, 1.0, 0.02)
-        nn.init.constant_(net.bias.data, 0)
+        nn.init.xavier_normal_(net.weight.data)
 
 
 if __name__ == '__main__':
@@ -31,21 +30,30 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # data set args
     parser.add_argument('-d', '--dir', type=str, required=True, help='The data directory')
+    parser.add_argument('-l', '--logdir', type=str, required=True, help='The log directory')
     parser.add_argument('-i', '--ins', type=int, required=True, help='The number of conditioning frames')
     parser.add_argument('-o', '--outs', type=int, required=True, help='The number of generated frames')
     parser.add_argument('-z', '--latent_dim', type=int, default=128, help='The dimension of the latent frame encoding')
     parser.add_argument('-w', '--wasserstein', action='store_true', help='Use Wasserstein GAN')
+    parser.add_argument('-v', '--config', type=int, default=1, help='The model configuration', choices=[1, 2, 3, 4, 5])
     # optimizer args
-    parser.add_argument('-e', '--epochs', type=int, default=20, help='The number of epochs')
+    parser.add_argument('-e', '--epochs', type=int, default=10, help='The number of epochs')
+    parser.add_argument('-t', '--workers', type=int, default=4, help='The number of threads for data pre-fetching')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
-    parser.add_argument('-l', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
-    parser.add_argument('-m', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
+    parser.add_argument('-g', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
+    parser.add_argument('-', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
     parser.add_argument('-n', '--lr_discriminator', type=float, default=4e-4, help='The discriminator learning rate')
     # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_true', help='Disable CUDA')
 
     args = parser.parse_args()
-    print(args)
+
+    # set up log directory
+    if not os.path.exists(args.logdir):
+        os.makedirs(args.logdir)
+
+    with open(os.path.join(args.logdir, 'args.txt'), 'w') as f:
+        json.dump(vars(args), f, indent=4, separators=(',', ':'))
 
     device = None
     if not args.disable_cuda and torch.cuda.is_available():
@@ -55,31 +63,69 @@ if __name__ == '__main__':
 
     print(device)
 
-    all_data = KITTIData(args.ins, args.outs, 0, args.dir)
-    [train_data, val_data] = data.random_split(all_data, [1100, 243])
-    train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=16)
-    val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=1)
+    all_data = UCF101Data(args.ins, args.outs, 3, 3, args.dir)
+    lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
+    [train_data, val_data] = data.random_split(all_data, lengths)
+    train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
     # training objectives
     disc_loss_fun = nn.BCEWithLogitsLoss()  # true-fake loss for discriminator
     gen_loss_fun = nn.MSELoss()  # feature matching loss for generator/encoder
 
-    # encoder setup
-    encoder = Encoder(frame_dim=64, init_temp=2, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                      attention_at=None, norm=nn.utils.spectral_norm, residual=True)
+    if not args.wasserstein:
+        if args.config == 1:
+            # basic
+            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
+                              attention_at=None, norm=nn.utils.weight_norm, residual=True)
+            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.weight_norm)
+            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=128, filters=[16, 32, 64, 128],
+                                        attention_at=32, norm=nn.utils.weight_norm, residual=True)
+        elif args.config == 2:
+            # basic - residual connections
+            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
+                              attention_at=None, norm=nn.utils.weight_norm, residual=False)
+            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.weight_norm)
+            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=128, filters=[16, 32, 64, 128],
+                                        attention_at=32, norm=nn.utils.weight_norm, residual=False)
+        elif args.config == 3:
+            # basic + spectral norm
+            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
+                              attention_at=None, norm=nn.utils.spectral_norm, residual=True)
+            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
+            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=128, filters=[16, 32, 64, 128],
+                                        attention_at=32, norm=nn.utils.spectral_norm, residual=True)
+        elif args.config == 4:
+            # basic + more filters enc/disc + spectral norm
+            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
+                              attention_at=None, norm=nn.utils.spectral_norm, residual=True)
+            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
+            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=128,
+                                        filters=[32, 64, 128, 256],
+                                        attention_at=32, norm=nn.utils.spectral_norm, residual=True)
+        elif args.config == 5:
+            # basic + different capacities + spectral norm
+            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
+                              attention_at=None, norm=nn.utils.spectral_norm, residual=True)
+            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
+            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=128,
+                                        filters=[16, 32, 64, 128],
+                                        attention_at=32, norm=nn.utils.spectral_norm, residual=True)
+    else:
+        # TODO: Add configs for Wasserstein
+        raise NotImplementedError
+
     encoder = encoder.to(device)
-    encoder.apply(weight_init)
-
-    # generator setup
-    generator = Generator(frame_dim=64, temporal_target=1, hidden_dim=args.latent_dim,
-                          filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
     generator = generator.to(device)
-    generator.apply(weight_init)
-
-    # discriminator setup
-    discriminator = Discrimator(frame_dim=64, init_temp=1, feature_dim=128, filters=[16, 32, 64, 128],
-                                attention_at=32, norm=nn.utils.spectral_norm, residual=True)
     discriminator = discriminator.to(device)
+
+    encoder.apply(weight_init)
+    generator.apply(weight_init)
     discriminator.apply(weight_init)
 
     # print model summaries
@@ -88,12 +134,12 @@ if __name__ == '__main__':
     summary(discriminator, input_size=(3, args.ins, 64, 64))
 
     # tensorboard log writer
-    tb_writer = SummaryWriter(log_dir='/home/ewok261/Documents/psychic/sem_2/adl4cv/runs')
+    tb_writer = SummaryWriter(log_dir=args.logdir)
 
     if args.wasserstein:
         # WASSERSTEIN GAN
 
-        # in WGAN, moment-based optimizers dont work as well -> see WGAN paper
+        # in WGAN, moment-based optimizers don't appear to work as well -> see WGAN paper
         encoder_optim = optim.RMSprop(encoder.parameters(), lr=args.lr_encoder)
         generator_optim = optim.RMSprop(generator.parameters(), lr=args.lr_generator)
         discriminator_optim = optim.RMSprop(discriminator.parameters(), lr=args.lr_discriminator)
@@ -137,9 +183,9 @@ if __name__ == '__main__':
 
                     loss_D = err_gen - err_real
                     loss_D.backward()
-                    #err_real.backward(m_one)
-                    #err_gen.backward(one)
-                    #err_D = err_real + err_gen
+                    # err_real.backward(m_one)
+                    # err_gen.backward(one)
+                    # err_D = err_real + err_gen
                     discriminator_optim.step()
                     j += 1
                     i += 1
@@ -159,10 +205,10 @@ if __name__ == '__main__':
 
                 _, out_gen, _ = discriminator(generated)
                 err_G = out_gen.mean(0).view(1)
-                
+
                 loss_G = -err_G
                 loss_G.backward()
-                #err_G.backward(one)
+                # err_G.backward(one)
                 generator_optim.step()
                 encoder_optim.step()
                 i += 1
@@ -170,9 +216,9 @@ if __name__ == '__main__':
                 # print statistics
                 if global_step % 10 == 9:
                     print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3}'.format(
-                        epoch, global_step, round(err_D.item(), 4), round(err_G.item(), 4)))
-                    tb_writer.add_scalar('D_loss', err_D.item(), global_step=global_step)
-                    tb_writer.add_scalar('G_loss', err_G.item(), global_step=global_step)
+                        epoch, global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
+                    tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
+                    tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
                     # log generated images
                     gen_imgs = torchvision.utils.make_grid(generated.squeeze())
                     tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
@@ -269,6 +315,12 @@ if __name__ == '__main__':
                     disc_running_acc_gen = 0.0
 
                 global_step += 1
+
+    # write model to disk
+    torch.save(encoder.state_dict(), os.path.join(args.logdir, 'encoder.pth'))
+    torch.save(generator.state_dict(), os.path.join(args.logdir, 'generator.pth'))
+    torch.save(discriminator.state_dict(), os.path.join(args.logdir, 'discriminator.pth'))
+
 
         # val_loss = 0.0
         # for inval, outval in val_loader:
