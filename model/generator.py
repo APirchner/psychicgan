@@ -39,6 +39,7 @@ class Generator(nn.Module):
                 out_size=out_sizes[i],
                 bias=True,
                 batchnorm=True,
+                norm=norm,
                 activation_fun=nn.LeakyReLU(0.2) if i < self.depth - 1 else nn.Tanh()
             )
             )

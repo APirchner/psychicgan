@@ -5,7 +5,7 @@ import model.layers as layers
 
 
 class Encoder(nn.Module):
-    def __init__(self, frame_dim=64, init_temp=3, target_temp=1, hidden_dim=128,
+    def __init__(self, frame_dim=64, init_temp=3, target_temp=2, hidden_dim=128,
                  filters=(64, 128, 256, 512), attention_at=8,
                  norm=nn.utils.weight_norm, residual=True):
         super(Encoder, self).__init__()
@@ -30,7 +30,7 @@ class Encoder(nn.Module):
         self.filters = [3]
         self.filters.extend(filters)
 
-        temps = [True if i > self.target_temp else False for i in range(init_temp, 0, -1)]
+        temps = [True if int(np.log2(i)) > int(np.log2(self.target_temp)) else False for i in range(init_temp, 0, -1)]
         temps = temps + [False for i in range(self.depth - len(temps))]
 
         self.linear = layers.NormLinear(c_in=self.target_temp * 4 * 4 * self.filters[-1], c_out=hidden_dim,
@@ -45,6 +45,7 @@ class Encoder(nn.Module):
                                                                  activation_fun=nn.ReLU(),
                                                                  batchnorm=True if i > 0 else False,
                                                                  bias=False,
+                                                                 norm=norm,
                                                                  down_spatial=True, down_temporal=temps[i])
                                        )
             else:
@@ -52,6 +53,7 @@ class Encoder(nn.Module):
                                                          activation_fun=nn.ReLU(),
                                                          batchnorm=True if i > 0 else False,
                                                          bias=False,
+                                                         norm=norm,
                                                          down_spatial=True, down_temporal=temps[i])
                                        )
             self.drop_stack.append(nn.Dropout3d(p=0.25))

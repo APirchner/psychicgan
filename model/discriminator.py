@@ -6,7 +6,8 @@ from model import layers
 
 
 class Discrimator(nn.Module):
-    def __init__(self, frame_dim=64, init_temp=3, feature_dim=128, filters=(64, 128, 256, 512), attention_at=8,
+    def __init__(self, frame_dim=64, init_temp=3, target_temp = 2, feature_dim=128, 
+                 filters=(64, 128, 256, 512), attention_at=8,
                  norm=nn.utils.weight_norm, residual=True):
         super(Discrimator, self).__init__()
         # check if spatial frame dim is power of 2
@@ -21,11 +22,13 @@ class Discrimator(nn.Module):
         # get position of attention layer
         self.att_idx = self.depth - int(np.log2(attention_at)) + 2 if attention_at is not None else None
 
+        self.target_temp = target_temp
+
         # starts out with RGB
         self.filters = [3]
         self.filters.extend(filters)
 
-        temps = [True if i > 1 else False for i in range(init_temp, 0, -1)]
+        temps = [True if int(np.log2(i)) > int(np.log2(self.target_temp)) else False for i in range(init_temp, 0, -1)]
         temps = temps + [False for _ in range(self.depth - len(temps))]
 
         self.linear = layers.NormLinear(c_in=self.filters[-1], c_out=feature_dim,
@@ -39,15 +42,17 @@ class Discrimator(nn.Module):
             if residual:
                 self.down_stack.append(layers.ResidualNormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                                  activation_fun=nn.LeakyReLU(0.2),
-                                                                 batchnorm=True if i > 0 else False,
+                                                                 batchnorm=False,#True if i > 0 else False,
                                                                  bias=False,
+                                                                 norm=norm,
                                                                  down_spatial=True, down_temporal=temps[i])
                                        )
             else:
                 self.down_stack.append(layers.NormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                          activation_fun=nn.LeakyReLU(0.2),
-                                                         batchnorm=True if i > 0 else False,
+                                                         batchnorm=False,#True if i > 0 else False,
                                                          bias=False,
+                                                         norm=norm,
                                                          down_spatial=True, down_temporal=temps[i])
                                        )
             self.drop_stack.append(nn.Dropout3d(p=0.4))
