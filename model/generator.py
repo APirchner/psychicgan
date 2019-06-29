@@ -5,7 +5,7 @@ import model.layers as layers
 
 class Generator(nn.Module):
     def __init__(self, frame_dim=64, temporal_target=3, hidden_dim=128, filters=(512, 256, 128, 64), attention_at=8,
-                 norm=nn.utils.weight_norm):
+                 norm=nn.utils.weight_norm, batchnorm=True):
         super(Generator, self).__init__()
         # check if spatial frame dim is power of 2
         assert not frame_dim & (frame_dim - 1)
@@ -29,7 +29,7 @@ class Generator(nn.Module):
         out_sizes = [(temp_sizes[i], 2 ** (i + 3), 2 ** (i + 3)) for i in range(self.depth)]
 
         self.linear = layers.NormLinear(c_in=hidden_dim, c_out=4 * 4 * self.filters[0],
-                                        norm=norm, bias=True, batchnorm=True)
+                                        norm=norm, bias=True, batchnorm=batchnorm)
 
         self.up_stack = []
 
@@ -38,7 +38,7 @@ class Generator(nn.Module):
                 c_in=self.filters[i], c_out=self.filters[i + 1],
                 out_size=out_sizes[i],
                 bias=True,
-                batchnorm=True,
+                batchnorm=batchnorm,
                 norm=norm,
                 activation_fun=nn.LeakyReLU(0.2) if i < self.depth - 1 else nn.Tanh()
             )

@@ -7,7 +7,7 @@ import model.layers as layers
 class Encoder(nn.Module):
     def __init__(self, frame_dim=64, init_temp=3, target_temp=2, hidden_dim=128,
                  filters=(64, 128, 256, 512), attention_at=8,
-                 norm=nn.utils.weight_norm, residual=True):
+                 norm=nn.utils.weight_norm, batchnorm=True, residual=True):
         super(Encoder, self).__init__()
         # check if spatial frame dim is power of 2
         assert not frame_dim & (frame_dim - 1)
@@ -43,7 +43,7 @@ class Encoder(nn.Module):
             if residual:
                 self.down_stack.append(layers.ResidualNormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                                  activation_fun=nn.ReLU(),
-                                                                 batchnorm=True if i > 0 else False,
+                                                                 batchnorm=batchnorm if i > 0 else False,
                                                                  bias=False,
                                                                  norm=norm,
                                                                  down_spatial=True, down_temporal=temps[i])
@@ -51,7 +51,7 @@ class Encoder(nn.Module):
             else:
                 self.down_stack.append(layers.NormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
                                                          activation_fun=nn.ReLU(),
-                                                         batchnorm=True if i > 0 else False,
+                                                         batchnorm=batchnorm if i > 0 else False,
                                                          bias=False,
                                                          norm=norm,
                                                          down_spatial=True, down_temporal=temps[i])
