@@ -84,10 +84,10 @@ if __name__ == '__main__':
 
     all_data = UCF101Data(args.ins, args.outs, 4, 5, args.dir)
     #lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
-    lengths = [20,20, len(all_data)-40]
+    lengths = [192,20, len(all_data)-212]
     [train_data, val_data, _] = data.random_split(all_data, lengths)
     #train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
-    train_loader = data.DataLoader(train_data, batch_size=2, shuffle=True, num_workers=args.workers)
+    train_loader = data.DataLoader(train_data, batch_size=16, shuffle=True, num_workers=args.workers)
     val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
     # training objectives
@@ -143,9 +143,9 @@ if __name__ == '__main__':
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
                               attention_at=None, norm=None, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=32, norm=None)
+                                  filters=[256, 128, 64, 32], attention_at=None, norm=None)
             discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1, filters=[16, 32, 64, 128],
-                                        attention_at=32, norm=None, batchnorm=False, residual=True)
+                                        attention_at=None, norm=None, batchnorm=False, residual=True)
         elif args.config == 2:
             # basic - residual connections
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
@@ -205,9 +205,9 @@ if __name__ == '__main__':
         # generator_optim = optim.RMSprop(generator.parameters(), lr=args.lr_generator)
         # discriminator_optim = optim.RMSprop(discriminator.parameters(), lr=args.lr_discriminator)
         # in improved WGAN they use Adam
-        encoder_optim = optim.Adam(encoder.parameters(), lr=args.lr_encoder, betas=(0.5, 0.9))
-        generator_optim = optim.Adam(generator.parameters(), lr=args.lr_generator, betas=(0.5, 0.9))
-        discriminator_optim = optim.Adam(discriminator.parameters(), lr=args.lr_discriminator, betas=(0.5, 0.9))
+        encoder_optim = optim.Adam(encoder.parameters(), lr=args.lr_encoder, betas=(0., 0.9))
+        generator_optim = optim.Adam(generator.parameters(), lr=args.lr_generator, betas=(0., 0.9))
+        discriminator_optim = optim.Adam(discriminator.parameters(), lr=args.lr_discriminator, betas=(0., 0.9))
 
         # encoder_sched = optim.lr_scheduler.ExponentialLR(encoder_optim, gamma=0.99)
         # generator_sched = optim.lr_scheduler.ExponentialLR(generator_optim, gamma=0.99)
@@ -284,9 +284,11 @@ if __name__ == '__main__':
                         epoch, global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
                     tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
                     tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
-                    # log generated images
-                    gen_imgs = torchvision.utils.make_grid(generated.squeeze())
+                    # log generated and real images
+                    gen_imgs = torchvision.utils.make_grid(((generated+1)/2).squeeze())
+                    real_imgs = torchvision.utils.make_grid(((out_frames+1)/2).squeeze())
                     tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
+                    tb_writer.add_image('R_imgs', real_imgs, global_step=global_step)
 
                 # do the validation
                 if global_step % 100 == 99:
