@@ -36,7 +36,7 @@ class UCF101Data(data.Dataset):
         self.n_blocks = []
         seglen = block_in + block_out
         for cnt in self.frame_cnt:
-            self.n_blocks.append((cnt-(seglen-1)*skip-1)//shift+1)
+            self.n_blocks.append((cnt-(seglen-1)*skip-1)//shift)
     
     def __getitem__(self, key):
         if isinstance(key, slice):
