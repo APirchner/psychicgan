@@ -56,7 +56,7 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--wasserstein', action='store_true', help='Use Wasserstein GAN')
     parser.add_argument('-v', '--config', type=int, default=1, help='The model configuration', choices=[1, 2, 3, 4, 5])
     # optimizer args
-    parser.add_argument('-e', '--epochs', type=int, default=10, help='The number of epochs')
+    parser.add_argument('-e', '--iterations', type=int, default=10, help='The number of iterations')
     parser.add_argument('-t', '--workers', type=int, default=4, help='The number of threads for data pre-fetching')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
     parser.add_argument('-g', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
@@ -84,10 +84,12 @@ if __name__ == '__main__':
 
     all_data = UCF101Data(args.ins, args.outs, 4, 5, args.dir)
     #lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
-    lengths = [192,20, len(all_data)-212]
-    [train_data, val_data, _] = data.random_split(all_data, lengths)
+    #lengths = [1,20, len(all_data)-21]
+    #[train_data, val_data, _] = data.random_split(all_data, lengths)
+    train_data = data.Subset(all_data, [56])
+    val_data = data.Subset(all_data, [126458])
     #train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
-    train_loader = data.DataLoader(train_data, batch_size=16, shuffle=True, num_workers=args.workers)
+    train_loader = data.DataLoader(train_data, batch_size=1, shuffle=False, num_workers=args.workers)
     val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
     # training objectives
@@ -141,9 +143,9 @@ if __name__ == '__main__':
         if args.config == 1:
             # basic
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                              attention_at=None, norm=None, residual=True)
+                              attention_at=None, norm=None, batchnorm=False, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=None, norm=None)
+                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=False)
             discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1, filters=[16, 32, 64, 128],
                                         attention_at=None, norm=None, batchnorm=False, residual=True)
         elif args.config == 2:
@@ -216,30 +218,100 @@ if __name__ == '__main__':
         one = torch.FloatTensor([1]).to(device)
         m_one = -1 * one
 
-        global_step = 0
-        for epoch in range(args.epochs):
-            i = 0
-            train_iter = iter(train_loader)
+        i = 0
+        train_iter = iter(train_loader)
+        for global_step in range(args.iterations):
 
-            while i < len(train_loader):
-                j = 0
-                while j < 5 and i < len(train_loader) - 1:
-                    # do 5 discriminator steps for each encoder/generator step -> see WGAN paper
-                    # get the inputs and move them to device
-                    data = next(train_iter)
-                    in_frames, out_frames = data
-                    in_frames = in_frames.to(device)
-                    out_frames = out_frames.to(device)
+            for j in range(5):
+                # do 5 discriminator steps for each encoder/generator step -> see WGAN paper
+                # get the inputs and move them to device
+                data = next(train_iter)
+                i += 1
+                if i==len(train_loader):
+                    train_iter = iter(train_loader)
+                    i = 0
+                in_frames, out_frames = data
+                in_frames = in_frames.to(device)
+                out_frames = out_frames.to(device)
 
-                    # zero the parameter gradients
+                # zero the parameter gradients
+                encoder.zero_grad()
+                generator.zero_grad()
+                discriminator.zero_grad()
+
+                # DISCRIMINATOR TRAINING
+                with torch.no_grad():
+                    hidden, _ = encoder(in_frames)
+                    generated, _ = generator(hidden)
+                out_real, _, _ = discriminator(out_frames)
+                out_gen, _, _ = discriminator(generated)
+
+                err_real = out_real.mean(0).view(1)
+                err_gen = out_gen.mean(0).view(1)
+
+                loss_D = err_gen - err_real + calc_gradient_penalty(discriminator, out_frames, generated, 10, device)
+                loss_D.backward()
+                # err_real.backward(m_one)
+                # err_gen.backward(one)
+                # err_D = err_real + err_gen
+                discriminator_optim.step()
+
+            # GENERATOR/ENCODER TRAINING
+            data = next(train_iter)
+            i += 1
+            if i==len(train_loader):
+                train_iter = iter(train_loader)
+                i = 0
+            in_frames, out_frames = data
+            in_frames = in_frames.to(device)
+            out_frames = out_frames.to(device)
+
+            encoder.zero_grad()
+            generator.zero_grad()
+            discriminator.zero_grad()
+
+            hidden, encoder_attn = encoder(in_frames)
+            generated, generator_attn = generator(hidden)
+
+            out_gen, _, _ = discriminator(generated)
+            err_G = out_gen.mean(0).view(1)
+
+            loss_G = -err_G
+            loss_G.backward()
+            # err_G.backward(one)
+            generator_optim.step()
+            encoder_optim.step()
+
+            # print statistics
+            if global_step % 10 == 9:
+                print('[Step {0}] Loss: (D) {1} - (G) {2}'.format(
+                    global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
+                tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
+                tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
+                # log generated and real images
+                gen_imgs = torchvision.utils.make_grid(((generated+1)/2).squeeze())
+                real_imgs = torchvision.utils.make_grid(((out_frames+1)/2).squeeze())
+                tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
+                tb_writer.add_image('R_imgs', real_imgs, global_step=global_step)
+
+            # do the validation
+            if global_step % 100 == 99:
+                generator.train(False)
+                encoder.train(False)
+                discriminator.train(False)
+                val_loss = 0.0
+                for in_frames, out_frames in val_loader:
+                    #with torch.no_grad():
                     encoder.zero_grad()
                     generator.zero_grad()
                     discriminator.zero_grad()
+                    # get the validation inputs and outputs
+                    in_frames = in_frames.to(device)
+                    out_frames = out_frames.to(device)
 
-                    # DISCRIMINATOR TRAINING
-                    with torch.no_grad():
-                        hidden, _ = encoder(in_frames)
-                        generated, _ = generator(hidden)
+                    # forward
+                    hidden, _ = encoder(in_frames)
+                    generated, _ = generator(hidden)
                     out_real, _, _ = discriminator(out_frames)
                     out_gen, _, _ = discriminator(generated)
 
@@ -247,83 +319,13 @@ if __name__ == '__main__':
                     err_gen = out_gen.mean(0).view(1)
 
                     loss_D = err_gen - err_real + calc_gradient_penalty(discriminator, out_frames, generated, 10, device)
-                    loss_D.backward()
-                    # err_real.backward(m_one)
-                    # err_gen.backward(one)
-                    # err_D = err_real + err_gen
-                    discriminator_optim.step()
-                    j += 1
-                    i += 1
-
-                # GENERATOR/ENCODER TRAINING
-                data = next(train_iter)
-                in_frames, out_frames = data
-                in_frames = in_frames.to(device)
-                out_frames = out_frames.to(device)
-
-                encoder.zero_grad()
-                generator.zero_grad()
-                discriminator.zero_grad()
-
-                hidden, encoder_attn = encoder(in_frames)
-                generated, generator_attn = generator(hidden)
-
-                out_gen, _, _ = discriminator(generated)
-                err_G = out_gen.mean(0).view(1)
-
-                loss_G = -err_G
-                loss_G.backward()
-                # err_G.backward(one)
-                generator_optim.step()
-                encoder_optim.step()
-                i += 1
-
-                # print statistics
-                if global_step % 10 == 9:
-                    print('[Epoch {0} - Step {1}] Loss: (D) {2} - (G) {3}'.format(
-                        epoch, global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
-                    tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
-                    tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
-                    # log generated and real images
-                    gen_imgs = torchvision.utils.make_grid(((generated+1)/2).squeeze())
-                    real_imgs = torchvision.utils.make_grid(((out_frames+1)/2).squeeze())
-                    tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
-                    tb_writer.add_image('R_imgs', real_imgs, global_step=global_step)
-
-                # do the validation
-                if global_step % 100 == 99:
-                    generator.train(False)
-                    encoder.train(False)
-                    discriminator.train(False)
-                    val_loss = 0.0
-                    for in_frames, out_frames in val_loader:
-                        #with torch.no_grad():
-                        encoder.zero_grad()
-                        generator.zero_grad()
-                        discriminator.zero_grad()
-                        # get the validation inputs and outputs
-                        in_frames = in_frames.to(device)
-                        out_frames = out_frames.to(device)
-
-                        # forward
-                        hidden, _ = encoder(in_frames)
-                        generated, _ = generator(hidden)
-                        out_real, _, _ = discriminator(out_frames)
-                        out_gen, _, _ = discriminator(generated)
-
-                        err_real = out_real.mean(0).view(1)
-                        err_gen = out_gen.mean(0).view(1)
-
-                        loss_D = err_gen - err_real + calc_gradient_penalty(discriminator, out_frames, generated, 10, device)
-                        val_loss += loss_D/len(val_data)
-                    print('[Epoch {0} - Step {1}] Val-loss: (D) {2}'.format(
-                        epoch, global_step, round(val_loss.item(), 4)))
-                    tb_writer.add_scalar('val_loss', val_loss.item(), global_step=global_step)
-                    generator.train(True)
-                    encoder.train(True)
-                    discriminator.train(True)
-
-                global_step += 1
+                    val_loss += loss_D/len(val_data)
+                print('[Step {0}] Val-loss: (D) {1}'.format(
+                    global_step, round(val_loss.item(), 4)))
+                tb_writer.add_scalar('val_loss', val_loss.item(), global_step=global_step)
+                generator.train(True)
+                encoder.train(True)
+                discriminator.train(True)
 
     else:
         encoder_optim = optim.Adam(encoder.parameters(), lr=args.lr_encoder, betas=(0.0, 0.9))
