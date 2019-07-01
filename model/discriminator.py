@@ -8,7 +8,7 @@ from model import layers
 class Discrimator(nn.Module):
     def __init__(self, frame_dim=64, init_temp=3, target_temp = 2, feature_dim=128, 
                  filters=(64, 128, 256, 512), attention_at=8,
-                 norm=nn.utils.weight_norm, batchnorm=True, residual=True):
+                 norm=nn.utils.weight_norm, batchnorm=True, dropout=0.4, residual=True):
         super(Discrimator, self).__init__()
         # check if spatial frame dim is power of 2
         assert not frame_dim & (frame_dim - 1)
@@ -55,7 +55,7 @@ class Discrimator(nn.Module):
                                                          norm=norm,
                                                          down_spatial=True, down_temporal=temps[i])
                                        )
-            self.drop_stack.append(nn.Dropout3d(p=0.4))
+            self.drop_stack.append(nn.Dropout3d(p=dropout))
 
         self.down_stack = nn.ModuleList(self.down_stack)
         self.drop_stack = nn.ModuleList(self.drop_stack)

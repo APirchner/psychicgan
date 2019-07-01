@@ -143,11 +143,11 @@ if __name__ == '__main__':
         if args.config == 1:
             # basic
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                              attention_at=None, norm=None, batchnorm=False, residual=True)
+                              attention_at=None, norm=None, batchnorm=False, dropout=0.0, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
                                   filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=False)
             discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1, filters=[16, 32, 64, 128],
-                                        attention_at=None, norm=None, batchnorm=False, residual=True)
+                                        attention_at=None, norm=None, batchnorm=False, dropout=0.0, residual=True)
         elif args.config == 2:
             # basic - residual connections
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
