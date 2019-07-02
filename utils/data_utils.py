@@ -9,6 +9,7 @@ from PIL import Image, ImageChops, ImageStat
 from torchvision import transforms
 import cv2
 
+
 class FramesData(data.Dataset):
 
     def __init__(self, block_in, block_out, folder_path):
@@ -52,6 +53,7 @@ class FramesData(data.Dataset):
         targets = torch.stack([to_tensor(img)*2-1 for img in targets], dim=1)
 
         return imgs, targets
+
 
 def transform_UCF_dataset(block_in, block_out, shift, skip, folder_path):
     save_dir = os.path.normpath(folder_path + os.sep + os.pardir + os.sep +'UCF-101-frames')
@@ -104,6 +106,7 @@ def transform_UCF_dataset(block_in, block_out, shift, skip, folder_path):
                     im = cv2.resize(im[:,40:280,:],(64,64))
                     to_image(im).save(os.path.join(new_set, '%02d.png' % k))
 
+
 def transform_KITTI_dataset(block_in, block_out, overlap, path_old):
     path_up = os.path.normpath(path_old + os.sep + os.pardir)
     path_new = os.path.join(path_up, "in_%d_out_%d_ol_%d" % (block_in, block_out, overlap))
@@ -147,6 +150,7 @@ def transform_KITTI_dataset(block_in, block_out, overlap, path_old):
                 new_img = imgs[idx].crop(box).resize((64, 64))
                 new_img.save(os.path.join(new_set, '%02d.png' % idx))
             '''
+
 
 def generate_boxes(locs, leng, heig, max_y, b_in, b_out, b_ol):
     boxes = []

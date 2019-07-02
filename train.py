@@ -12,7 +12,7 @@ import torchvision
 from torchsummary import summary
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.data_utils import UCF101Data
+from utils.data_utils import FramesData
 from model.encoder import Encoder
 from model.generator import Generator
 from model.discriminator import Discrimator
@@ -25,12 +25,13 @@ def weight_init(net):
     elif classname.find('Conv1d') != -1:
         nn.init.xavier_normal_(net.weight.data)
 
+
 def calc_gradient_penalty(netD, real_data, fake_data, l, device):
     batch_size = real_data.shape[0]
     alpha = torch.rand(batch_size, 1)
     alpha = alpha.to(device)
 
-    interpolates = alpha[:,None,:,None,None] * real_data + ((1 - alpha[:,None,:,None,None]) * fake_data)
+    interpolates = alpha[:, None, :, None, None] * real_data + ((1 - alpha[:, None, :, None, None]) * fake_data)
 
     interpolates = autograd.Variable(interpolates, requires_grad=True)
 
@@ -44,8 +45,8 @@ def calc_gradient_penalty(netD, real_data, fake_data, l, device):
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * l
     return gradient_penalty
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # data set args
     parser.add_argument('-d', '--dir', type=str, required=True, help='The data directory')
@@ -82,13 +83,13 @@ if __name__ == '__main__':
 
     print(device)
 
-    all_data = UCF101Data(args.ins, args.outs, 4, 5, args.dir)
-    #lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
-    #lengths = [1,20, len(all_data)-21]
-    #[train_data, val_data, _] = data.random_split(all_data, lengths)
+    all_data = FramesData(args.ins, args.outs, args.dir)
+    # lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
+    # lengths = [1,20, len(all_data)-21]
+    # [train_data, val_data, _] = data.random_split(all_data, lengths)
     train_data = data.Subset(all_data, [56])
-    val_data = data.Subset(all_data, [126458])
-    #train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    val_data = data.Subset(all_data, [56000])
+    # train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
     train_loader = data.DataLoader(train_data, batch_size=1, shuffle=False, num_workers=args.workers)
     val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=args.workers)
 
@@ -143,11 +144,12 @@ if __name__ == '__main__':
         if args.config == 1:
             # basic
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                              attention_at=None, norm=None, batchnorm=False, dropout=0.0, residual=True)
+                              attention_at=16, norm=None, batchnorm=False, dropout=0.0, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
                                   filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=False)
-            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1, filters=[16, 32, 64, 128],
-                                        attention_at=None, norm=None, batchnorm=False, dropout=0.0, residual=True)
+            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+                                        filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
+                                        dropout=0.0, residual=True)
         elif args.config == 2:
             # basic - residual connections
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
@@ -194,7 +196,7 @@ if __name__ == '__main__':
     # print model summaries
     summary(encoder, input_size=(3, args.ins, 64, 64))
     summary(generator, input_size=(args.latent_dim,))
-    summary(discriminator, input_size=(3, args.outs, 64, 64))
+    summary(discriminator, input_size=(3, 1+args.outs, 64, 64))
 
     # tensorboard log writer
     tb_writer = SummaryWriter(log_dir=args.logdir)
@@ -227,7 +229,7 @@ if __name__ == '__main__':
                 # get the inputs and move them to device
                 data = next(train_iter)
                 i += 1
-                if i==len(train_loader):
+                if i == len(train_loader):
                     train_iter = iter(train_loader)
                     i = 0
                 in_frames, out_frames = data
@@ -243,13 +245,18 @@ if __name__ == '__main__':
                 with torch.no_grad():
                     hidden, _ = encoder(in_frames)
                     generated, _ = generator(hidden)
-                out_real, _, _ = discriminator(out_frames)
-                out_gen, _, _ = discriminator(generated)
+                # add one last past frame to the discriminator input
+                out_frames_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), out_frames], dim=2)
+                generated_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), generated], dim=2)
+
+                out_real, _, _ = discriminator(out_frames_disc)
+                out_gen, _, _ = discriminator(generated_disc)
 
                 err_real = out_real.mean(0).view(1)
                 err_gen = out_gen.mean(0).view(1)
 
-                loss_D = err_gen - err_real + calc_gradient_penalty(discriminator, out_frames, generated, 10, device)
+                loss_D = err_gen - err_real + calc_gradient_penalty(discriminator, out_frames_disc, generated_disc, 10,
+                                                                    device)
                 loss_D.backward()
                 # err_real.backward(m_one)
                 # err_gen.backward(one)
@@ -273,7 +280,9 @@ if __name__ == '__main__':
             hidden, encoder_attn = encoder(in_frames)
             generated, generator_attn = generator(hidden)
 
-            out_gen, _, _ = discriminator(generated)
+            generated_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), generated], dim=2)
+
+            out_gen, _, _ = discriminator(generated_disc)
             err_G = out_gen.mean(0).view(1)
 
             loss_G = -err_G
@@ -301,25 +310,30 @@ if __name__ == '__main__':
                 discriminator.train(False)
                 val_loss = 0.0
                 for in_frames, out_frames in val_loader:
-                    #with torch.no_grad():
-                    encoder.zero_grad()
-                    generator.zero_grad()
-                    discriminator.zero_grad()
-                    # get the validation inputs and outputs
-                    in_frames = in_frames.to(device)
-                    out_frames = out_frames.to(device)
+                    with torch.no_grad():
+                        encoder.zero_grad()
+                        generator.zero_grad()
+                        discriminator.zero_grad()
+                        # get the validation inputs and outputs
+                        in_frames = in_frames.to(device)
+                        out_frames = out_frames.to(device)
 
-                    # forward
-                    hidden, _ = encoder(in_frames)
-                    generated, _ = generator(hidden)
-                    out_real, _, _ = discriminator(out_frames)
-                    out_gen, _, _ = discriminator(generated)
+                        # forward
+                        hidden, _ = encoder(in_frames)
+                        generated, _ = generator(hidden)
 
-                    err_real = out_real.mean(0).view(1)
-                    err_gen = out_gen.mean(0).view(1)
+                        out_frames_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), out_frames], dim=2)
+                        generated_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), generated], dim=2)
 
-                    loss_D = err_gen - err_real + calc_gradient_penalty(discriminator, out_frames, generated, 10, device)
-                    val_loss += loss_D/len(val_data)
+                        out_real, _, _ = discriminator(out_frames_disc)
+                        out_gen, _, _ = discriminator(generated_disc)
+
+                        err_real = out_real.mean(0).view(1)
+                        err_gen = out_gen.mean(0).view(1)
+
+                        loss_D = err_gen - err_real
+                        # calc_gradient_penalty(discriminator, out_frames_disc, generated_disc, 10, device)
+                        val_loss += loss_D/len(val_data)
                 print('[Step {0}] Val-loss: (D) {1}'.format(
                     global_step, round(val_loss.item(), 4)))
                 tb_writer.add_scalar('val_loss', val_loss.item(), global_step=global_step)
