@@ -1,6 +1,7 @@
 import argparse
 import os
 import json
+import numpy as np
 
 import torch
 import torch.utils.data as data
@@ -85,13 +86,17 @@ if __name__ == '__main__':
 
     all_data = FramesData(args.ins, args.outs, args.dir)
     # lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
-    # lengths = [1,20, len(all_data)-21]
-    # [train_data, val_data, _] = data.random_split(all_data, lengths)
-    train_data = data.Subset(all_data, [56])
-    val_data = data.Subset(all_data, [56000])
+    shuffled_idx = range(len(all_data))
+    np.random.shuffle(shuffled_idx)
+    train_idx = shuffled_idx[:50000]
+    val_idx = shuffled_idx[50000:60000]
+    test_idx = shuffled_idx[60000:70000]
+
+    train_data = data.Subset(all_data, train_idx)
+    val_data = data.Subset(all_data, val_idx)
     # train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
-    train_loader = data.DataLoader(train_data, batch_size=1, shuffle=False, num_workers=args.workers)
-    val_loader = data.DataLoader(val_data, batch_size=1, shuffle=False, num_workers=args.workers)
+    train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    val_loader = data.DataLoader(val_data, batch_size=32, shuffle=False, num_workers=args.workers)
 
     # training objectives
     disc_loss_fun = nn.BCEWithLogitsLoss()  # true-fake loss for discriminator
@@ -297,9 +302,11 @@ if __name__ == '__main__':
                     global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
                 tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
                 tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
+
+            if global_step % 100 == 99:
                 # log generated and real images
-                gen_imgs = torchvision.utils.make_grid(((generated+1)/2).squeeze())
-                real_imgs = torchvision.utils.make_grid(((out_frames+1)/2).squeeze())
+                gen_imgs = torchvision.utils.make_grid(((generated[:64, :, :, :, :]+1)/2).squeeze())
+                real_imgs = torchvision.utils.make_grid(((out_frames[:64, :, :, :, :]+1)/2).squeeze())
                 tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
                 tb_writer.add_image('R_imgs', real_imgs, global_step=global_step)
 
@@ -337,6 +344,10 @@ if __name__ == '__main__':
                 print('[Step {0}] Val-loss: (D) {1}'.format(
                     global_step, round(val_loss.item(), 4)))
                 tb_writer.add_scalar('val_loss', val_loss.item(), global_step=global_step)
+                gen_imgs_val = torchvision.utils.make_grid(((generated + 1) / 2).squeeze())
+                real_imgs_val = torchvision.utils.make_grid(((out_frames + 1) / 2).squeeze())
+                tb_writer.add_image('G_imgs_val', gen_imgs_val, global_step=global_step)
+                tb_writer.add_image('R_imgs_val', real_imgs_val, global_step=global_step)
                 generator.train(True)
                 encoder.train(True)
                 discriminator.train(True)
@@ -435,6 +446,8 @@ if __name__ == '__main__':
     torch.save(encoder.state_dict(), os.path.join(args.logdir, 'encoder.pth'))
     torch.save(generator.state_dict(), os.path.join(args.logdir, 'generator.pth'))
     torch.save(discriminator.state_dict(), os.path.join(args.logdir, 'discriminator.pth'))
+    torch.save({'train_idx': train_idx, 'val_idx': val_idx, 'test_idx': test_idx},
+               os.path.join(args.logdir, 'data_idx.pth'))
 
 
         # val_loss = 0.0
