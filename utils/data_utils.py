@@ -55,10 +55,10 @@ class FramesData(data.Dataset):
         return imgs, targets
 
 
-def transform_UCF_dataset(block_in, block_out, shift, skip, folder_path):
-    save_dir = os.path.normpath(folder_path + os.sep + os.pardir + os.sep +'UCF-101-frames')
+def transform_UCF_dataset(block_in, block_out, shift, skip, folder_path, folder_name_out):
+    save_dir = os.path.normpath(folder_path + os.sep + os.pardir + os.sep + folder_name_out)
     os.mkdir(save_dir)
-    with open(os.path.join(folder_path,'classes.txt'),'r') as file:
+    with open(os.path.join(folder_path,'classes_red.txt'),'r') as file:
         video_folders = [os.path.join(folder_path,line[:-1]) for line in file]
         all_videos = sorted([os.path.join(x,y) for x in video_folders for y in os.listdir(x)])
 
@@ -88,8 +88,6 @@ def transform_UCF_dataset(block_in, block_out, shift, skip, folder_path):
                 frame_idx.append(frame_idx[-1]+skip)
 
             vidcap = cv2.VideoCapture(all_videos[video_idx])
-            new_set = os.path.join(save_dir, '%06d' % index)
-            os.mkdir(new_set)
 
             imgs = []
             total_success = True
@@ -101,6 +99,8 @@ def transform_UCF_dataset(block_in, block_out, shift, skip, folder_path):
                 imgs.append(image)
 
             if total_success:
+                new_set = os.path.join(save_dir, '%06d' % index)
+                os.mkdir(new_set)
                 for k in range(len(imgs)):
                     im = cv2.cvtColor(imgs[k],cv2.COLOR_BGR2RGB)
                     im = cv2.resize(im[:,40:280,:],(64,64))
