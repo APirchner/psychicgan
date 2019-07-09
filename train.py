@@ -86,7 +86,8 @@ if __name__ == '__main__':
 
     all_data = FramesData(args.ins, args.outs, args.dir)
     # lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
-    shuffled_idx = range(len(all_data))
+
+    shuffled_idx = list(range(len(all_data)))
     np.random.shuffle(shuffled_idx)
     train_idx = shuffled_idx[:50000]
     val_idx = shuffled_idx[50000:60000]
@@ -94,7 +95,7 @@ if __name__ == '__main__':
 
     train_data = data.Subset(all_data, train_idx)
     val_data = data.Subset(all_data, val_idx)
-    # train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+
     train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
     val_loader = data.DataLoader(val_data, batch_size=32, shuffle=False, num_workers=args.workers)
 
@@ -149,9 +150,9 @@ if __name__ == '__main__':
         if args.config == 1:
             # basic
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                              attention_at=16, norm=None, batchnorm=False, dropout=0.0, residual=True)
+                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=False)
+                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
             discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
                                         filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
                                         dropout=0.0, residual=True)
