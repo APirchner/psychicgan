@@ -157,21 +157,23 @@ if __name__ == '__main__':
                                         filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
                                         dropout=0.0, residual=True)
         elif args.config == 2:
-            # basic - residual connections
+            # basic - attention
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                              attention_at=None, norm=None, residual=False)
+                              attention_at=None, norm=None, batchnorm=True, dropout=0.0, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=32, norm=None)
-            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1, filters=[16, 32, 64, 128],
-                                        attention_at=32, norm=None, batchnorm=False, residual=False)
+                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
+            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+                                        filters=[16, 32, 64, 128], attention_at=None, norm=None, batchnorm=False,
+                                        dropout=0.0, residual=True)
         elif args.config == 3:
-            # basic + spectral norm
-            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                              attention_at=None, norm=nn.utils.spectral_norm, residual=True)
+            # basic + more filters enc/disc
+            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
+                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
-            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1, filters=[16, 32, 64, 128],
-                                        attention_at=32, norm=nn.utils.spectral_norm, batchnorm=False, residual=True)
+                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
+            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+                                        filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=False,
+                                        dropout=0.0, residual=True)
         elif args.config == 4:
             # basic + more filters enc/disc + spectral norm
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
