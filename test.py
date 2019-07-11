@@ -56,7 +56,7 @@ if __name__ == '__main__':
     val_data = data.Subset(all_data, val_idx)
     test_data = data.Subset(all_data, test_idx)
 
-    # train_loader = data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    train_loader = data.DataLoader(train_data, batch_size=1, shuffle=True)
     # val_loader = data.DataLoader(val_data, batch_size=32, shuffle=False, num_workers=args.workers)
     test_loader = data.DataLoader(test_data, batch_size=1, shuffle=True)
 
@@ -171,6 +171,28 @@ if __name__ == '__main__':
     summary(generator, input_size=(train_lat_dim,))
     summary(discriminator, input_size=(3, 1+train_outs, 64, 64))
 
+    nims = 10
+
+    for in_frames, out_frames in train_loader:
+        in_frames = in_frames.to(device)
+        out_frames = out_frames.to(device)
+
+        with torch.no_grad():
+            # forward
+            hidden, _ = encoder(in_frames)
+            generated, _ = generator(hidden)
+
+            out_frames_disc = torch.cat([in_frames, out_frames], dim=2).squeeze().permute(1, 0, 2, 3)
+            generated_disc = torch.cat([in_frames, generated], dim=2).squeeze().permute(1, 0, 2, 3)
+
+        save_image(torch.cat([(out_frames_disc+1)/2, (generated_disc+1)/2], dim=0), filename=os.path.join(args.logdir, 'train'+str(nims)+'.png'),
+                   nrow=train_ins+train_outs)
+        nims -= 1
+        if nims == 0:
+            break
+
+    nims = 10
+
     for in_frames, out_frames in test_loader:
         in_frames = in_frames.to(device)
         out_frames = out_frames.to(device)
@@ -183,7 +205,8 @@ if __name__ == '__main__':
             out_frames_disc = torch.cat([in_frames, out_frames], dim=2).squeeze().permute(1, 0, 2, 3)
             generated_disc = torch.cat([in_frames, generated], dim=2).squeeze().permute(1, 0, 2, 3)
 
-        save_image(torch.cat([out_frames_disc, generated_disc], dim=0), filename=os.path.join(args.logdir, 'test.png'),
+        save_image(torch.cat([(out_frames_disc+1)/2, (generated_disc+1)/2], dim=0), filename=os.path.join(args.logdir, 'test'+str(nims)+'.png'),
                    nrow=train_ins+train_outs)
-
-        break
+        nims -= 1
+        if nims == 0:
+            break
