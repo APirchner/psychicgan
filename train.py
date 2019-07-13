@@ -271,33 +271,34 @@ if __name__ == '__main__':
                 # err_D = err_real + err_gen
                 discriminator_optim.step()
 
-            # GENERATOR/ENCODER TRAINING
-            data = next(train_iter)
-            i += 1
-            if i==len(train_loader):
-                train_iter = iter(train_loader)
-                i = 0
-            in_frames, out_frames = data
-            in_frames = in_frames.to(device)
-            out_frames = out_frames.to(device)
+            if global_step >= 50:
+                # GENERATOR/ENCODER TRAINING
+                data = next(train_iter)
+                i += 1
+                if i == len(train_loader):
+                    train_iter = iter(train_loader)
+                    i = 0
+                in_frames, out_frames = data
+                in_frames = in_frames.to(device)
+                out_frames = out_frames.to(device)
 
-            encoder.zero_grad()
-            generator.zero_grad()
-            discriminator.zero_grad()
+                encoder.zero_grad()
+                generator.zero_grad()
+                discriminator.zero_grad()
 
-            hidden, encoder_attn = encoder(in_frames)
-            generated, generator_attn = generator(hidden)
+                hidden, encoder_attn = encoder(in_frames)
+                generated, generator_attn = generator(hidden)
 
-            generated_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), generated], dim=2)
+                generated_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), generated], dim=2)
 
-            out_gen, _, _ = discriminator(generated_disc)
-            err_G = out_gen.mean(0).view(1)
+                out_gen, _, _ = discriminator(generated_disc)
+                err_G = out_gen.mean(0).view(1)
 
-            loss_G = -err_G
-            loss_G.backward()
-            # err_G.backward(one)
-            generator_optim.step()
-            encoder_optim.step()
+                loss_G = -err_G
+                loss_G.backward()
+                # err_G.backward(one)
+                generator_optim.step()
+                encoder_optim.step()
 
             # print statistics
             if global_step % 10 == 9:
@@ -451,7 +452,6 @@ if __name__ == '__main__':
     torch.save(discriminator.state_dict(), os.path.join(args.logdir, 'discriminator.pth'))
     torch.save({'train_idx': train_idx, 'val_idx': val_idx, 'test_idx': test_idx},
                os.path.join(args.logdir, 'data_idx.pth'))
-
 
         # val_loss = 0.0
         # for inval, outval in val_loader:
