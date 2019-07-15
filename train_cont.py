@@ -204,7 +204,7 @@ if __name__ == '__main__':
     # tensorboard log writer
     tb_writer = SummaryWriter(log_dir=new_logdir)
 
-    if args.wasserstein:
+    if train_wgan:
         # WASSERSTEIN GAN
 
         # in WGAN, moment-based optimizers don't appear to work as well -> see WGAN paper
@@ -356,3 +356,4 @@ if __name__ == '__main__':
     torch.save(discriminator.state_dict(), os.path.join(new_logdir, 'discriminator.pth'))
     torch.save({'train_idx': train_idx, 'val_idx': val_idx, 'test_idx': test_idx},
                os.path.join(new_logdir, 'data_idx.pth'))
+

@@ -302,10 +302,14 @@ if __name__ == '__main__':
 
             # print statistics
             if global_step % 10 == 9:
-                print('[Step {0}] Loss: (D) {1} - (G) {2}'.format(
-                    global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
+                if global_step >= 50:
+                    print('[Step {0}] Loss: (D) {1} - (G) {2}'.format(
+                          global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
+                    tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
+                else:
+                    print('[Step {0}] Loss: (D) {1}'.format(
+                          global_step, round(loss_D.item(), 4)))
                 tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
-                tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
 
             if global_step % 100 == 99:
                 # log generated and real images
