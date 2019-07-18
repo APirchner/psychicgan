@@ -14,9 +14,9 @@ from torchsummary import summary
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.data_utils import FramesData
-from model.encoder import Encoder
-from model.generator import Generator
-from model.discriminator import Discrimator
+from model.encoder import Encoder, EncoderMoreConvs
+from model.generator import Generator, GeneratorMoreConvs
+from model.discriminator import Discrimator, DiscrimatorMoreConvs
 
 
 def weight_init(net):
@@ -149,13 +149,14 @@ if __name__ == '__main__':
     else:
         if args.config == 1:
             # basic
-            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
-                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
-            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
-            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
-                                        filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
-                                        dropout=0.0, residual=True)
+            encoder = EncoderMoreConvs(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim,
+                                       filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=True,
+                                       dropout=0.0, residual=True)
+            generator = GeneratorMoreConvs(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                           filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
+            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+                                                 filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
+                                                 dropout=0.0, residual=True)
         elif args.config == 2:
             # basic - attention
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
@@ -167,13 +168,14 @@ if __name__ == '__main__':
                                         dropout=0.0, residual=True)
         elif args.config == 3:
             # basic + more filters enc/disc
-            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
-                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
-            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
-            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
-                                        filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=False,
-                                        dropout=0.0, residual=True)
+            encoder = EncoderMoreConvs(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim,
+                                       filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=True,
+                                       dropout=0.0, residual=True)
+            generator = GeneratorMoreConvs(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                           filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
+            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+                                                 filters=[32, 64, 128, 256], attention_at=16, norm=None,
+                                                 batchnorm=False, dropout=0.0, residual=True)
         elif args.config == 4:
             # basic + more filters enc/disc + spectral norm
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
