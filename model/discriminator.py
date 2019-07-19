@@ -113,39 +113,22 @@ class DiscrimatorMoreConvs(nn.Module):
 
         for i in range(self.depth):
             if residual:
-                self.down_stack.append(layers.ResidualNormConv3D(c_in=self.filters[i], c_out=self.filters[i],
-                                                                 activation_fun=nn.LeakyReLU(0.2),
-                                                                 batchnorm=batchnorm if i > 0 else False,
-                                                                 bias=False,
-                                                                 norm=norm,
-                                                                 down_spatial=False, down_temporal=False)
+                self.down_stack.append(layers.ResidualDoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i],
+                                                                        activation_fun=nn.LeakyReLU(0.2),
+                                                                        batchnorm=batchnorm if i > 0 else False,
+                                                                        bias=False,
+                                                                        norm=norm,
+                                                                        down_spatial=False, down_temporal=False)
                                        )
-                self.drop_stack.append(nn.Dropout3d(p=dropout))
-                self.down_stack.append(layers.ResidualNormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
-                                                                 activation_fun=nn.LeakyReLU(0.2),
-                                                                 batchnorm=batchnorm if i > 0 else False,
-                                                                 bias=False,
-                                                                 norm=norm,
-                                                                 down_spatial=True, down_temporal=temps[i])
-                                       )
-                self.drop_stack.append(nn.Dropout3d(p=dropout))
             else:
-                self.down_stack.append(layers.NormConv3D(c_in=self.filters[i], c_out=self.filters[i],
-                                                         activation_fun=nn.LeakyReLU(0.2),
-                                                         batchnorm=batchnorm if i > 0 else False,
-                                                         bias=False,
-                                                         norm=norm,
-                                                         down_spatial=False, down_temporal=False)
+                self.down_stack.append(layers.DoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i],
+                                                                activation_fun=nn.LeakyReLU(0.2),
+                                                                batchnorm=batchnorm if i > 0 else False,
+                                                                bias=False,
+                                                                norm=norm,
+                                                                down_spatial=False, down_temporal=False)
                                        )
-                self.drop_stack.append(nn.Dropout3d(p=dropout))
-                self.down_stack.append(layers.NormConv3D(c_in=self.filters[i], c_out=self.filters[i + 1],
-                                                         activation_fun=nn.LeakyReLU(0.2),
-                                                         batchnorm=batchnorm if i > 0 else False,
-                                                         bias=False,
-                                                         norm=norm,
-                                                         down_spatial=True, down_temporal=temps[i])
-                                       )
-                self.drop_stack.append(nn.Dropout3d(p=dropout))
+            self.drop_stack.append(nn.Dropout3d(p=dropout))
 
         self.down_stack = nn.ModuleList(self.down_stack)
         self.drop_stack = nn.ModuleList(self.drop_stack)
@@ -158,7 +141,7 @@ class DiscrimatorMoreConvs(nn.Module):
         x = input
         for i in range(len(self.down_stack)):
             # include attention layer at chosen depth (multiply by 2 because each block has 2 convs)
-            if self.att_idx is not None and i == 2*self.att_idx:
+            if self.att_idx is not None and i == self.att_idx:
                 x, attn = self.attention(x)
             x = self.down_stack[i](x)
             x = self.drop_stack[i](x)
