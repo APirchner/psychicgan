@@ -117,7 +117,7 @@ class GeneratorMoreConvs(nn.Module):
         x = x.reshape((-1, self.filters[0], 1, 4, 4))
         for i in range(len(self.up_stack)):
             # include attention layer at chosen depth (multiply by 2 because each block has 2 convs)
-            if self.att_idx is not None and i == 2*self.att_idx:
+            if self.att_idx is not None and i == 2*self.att_idx+1:
                 x, attn = self.attention(x)
             x = self.up_stack[i](x)
         return x, attn

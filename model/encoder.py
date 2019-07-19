@@ -30,7 +30,7 @@ class Encoder(nn.Module):
         self.filters = [3]
         self.filters.extend(filters)
 
-        temps = [True if int(np.log2(i)) > int(np.log2(self.target_temp)) else False for i in range(init_temp, 0, -1)]
+        temps = [True if np.log2(i) > int(np.log2(self.target_temp))+1 else False for i in range(init_temp, 0, -1)]
         temps = temps + [False for i in range(self.depth - len(temps))]
 
         self.linear = layers.NormLinear(c_in=self.target_temp * 4 * 4 * self.filters[-1], c_out=hidden_dim,
@@ -104,9 +104,9 @@ class EncoderMoreConvs(nn.Module):
         self.filters = [3]
         self.filters.extend(filters)
 
-        temps = [True if int(np.log2(i)) > int(np.log2(self.target_temp)) else False for i in range(init_temp, 0, -1)]
-        temps = temps + [False for i in range(self.depth - len(temps))]
-
+        temps = [True if np.log2(i) > int(np.log2(self.target_temp))+1 else False for i in range(init_temp, 0, -1)]
+        temps = [False for i in range(self.depth - len(temps))] + temps[::-1]
+        print(temps)
         self.linear = layers.NormLinear(c_in=self.target_temp * 4 * 4 * self.filters[-1], c_out=hidden_dim,
                                         norm=norm, bias=True, batchnorm=False)
 

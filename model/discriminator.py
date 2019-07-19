@@ -28,7 +28,7 @@ class Discrimator(nn.Module):
         self.filters = [3]
         self.filters.extend(filters)
 
-        temps = [True if int(np.log2(i)) > int(np.log2(self.target_temp)) else False for i in range(init_temp, 0, -1)]
+        temps = [True if np.log2(i) > int(np.log2(self.target_temp))+1 else False for i in range(init_temp, 0, -1)]
         temps = temps + [False for _ in range(self.depth - len(temps))]
 
         self.linear = layers.NormLinear(c_in=self.filters[-1], c_out=feature_dim,
@@ -101,8 +101,8 @@ class DiscrimatorMoreConvs(nn.Module):
         self.filters = [3]
         self.filters.extend(filters)
 
-        temps = [True if int(np.log2(i)) > int(np.log2(self.target_temp)) else False for i in range(init_temp, 0, -1)]
-        temps = temps + [False for _ in range(self.depth - len(temps))]
+        temps = [True if np.log2(i) > int(np.log2(self.target_temp))+1 else False for i in range(init_temp, 0, -1)]
+        temps = [False for _ in range(self.depth - len(temps))] + temps[::-1]
 
         self.linear = layers.NormLinear(c_in=self.filters[-1], c_out=feature_dim,
                                         norm=norm, bias=True, batchnorm=False)
