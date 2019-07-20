@@ -89,9 +89,9 @@ if __name__ == '__main__':
 
     shuffled_idx = list(range(len(all_data)))
     np.random.shuffle(shuffled_idx)
-    train_idx = shuffled_idx[:50000]
-    val_idx = shuffled_idx[50000:60000]
-    test_idx = shuffled_idx[60000:70000]
+    train_idx = shuffled_idx[:80000]
+    val_idx = shuffled_idx[80000:90000]
+    test_idx = shuffled_idx[90000:100000]
 
     train_data = data.Subset(all_data, train_idx)
     val_data = data.Subset(all_data, val_idx)
@@ -150,13 +150,13 @@ if __name__ == '__main__':
         if args.config == 1:
             # basic
             encoder = EncoderMoreConvs(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim,
-                                       filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=True,
-                                       dropout=0.0, residual=True)
+                                       filters=[16, 32, 64, 128], attention_at=16, target_temp=1,
+                                       norm=None, batchnorm=True, dropout=0.0, residual=True)
             generator = GeneratorMoreConvs(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
                                            filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
-            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
-                                                 filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
-                                                 dropout=0.0, residual=True)
+            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+                                        filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
+                                        dropout=0.0, residual=True)
         elif args.config == 2:
             # basic - attention
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[16, 32, 64, 128],
@@ -177,14 +177,14 @@ if __name__ == '__main__':
                                                  filters=[32, 64, 128, 256], attention_at=16, norm=None,
                                                  batchnorm=False, dropout=0.0, residual=True)
         elif args.config == 4:
-            # basic + more filters enc/disc + spectral norm
+            # basic + more filters enc/disc + attn in gen
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
-                              attention_at=None, norm=nn.utils.spectral_norm, residual=True)
+                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
-            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1,
-                                        filters=[32, 64, 128, 256],
-                                        attention_at=32, norm=nn.utils.spectral_norm, batchnorm=False, residual=True)
+                                  filters=[256, 128, 64, 32], attention_at=16, norm=None, batchnorm=True)
+            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+                                        filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=False,
+                                        dropout=0.0, residual=True)
         elif args.config == 5:
             # basic + different capacities + spectral norm
             encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
@@ -193,7 +193,7 @@ if __name__ == '__main__':
                                   filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
             discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1,
                                         filters=[16, 32, 64, 128],
-                                        attention_at=32, norm=nn.utils.spectral_norm, batchnorm=False, residual=True)
+                                        attention_at=16, norm=nn.utils.spectral_norm, batchnorm=False, residual=True)
 
     encoder = encoder.to(device)
     generator = generator.to(device)
@@ -233,8 +233,12 @@ if __name__ == '__main__':
         i = 0
         train_iter = iter(train_loader)
         for global_step in range(args.iterations):
-
-            for j in range(5):
+            # if global_step < 10 or global_step%500 == 0:
+            #     disc_steps = 100
+            # else:
+            #     disc_steps = 5
+            disc_steps = 5
+            for j in range(disc_steps):
                 # do 5 discriminator steps for each encoder/generator step -> see WGAN paper
                 # get the inputs and move them to device
                 data = next(train_iter)
@@ -273,44 +277,39 @@ if __name__ == '__main__':
                 # err_D = err_real + err_gen
                 discriminator_optim.step()
 
-            if global_step >= 50:
-                # GENERATOR/ENCODER TRAINING
-                data = next(train_iter)
-                i += 1
-                if i == len(train_loader):
-                    train_iter = iter(train_loader)
-                    i = 0
-                in_frames, out_frames = data
-                in_frames = in_frames.to(device)
-                out_frames = out_frames.to(device)
+            # GENERATOR/ENCODER TRAINING
+            data = next(train_iter)
+            i += 1
+            if i == len(train_loader):
+                train_iter = iter(train_loader)
+                i = 0
+            in_frames, out_frames = data
+            in_frames = in_frames.to(device)
+            out_frames = out_frames.to(device)
 
-                encoder.zero_grad()
-                generator.zero_grad()
-                discriminator.zero_grad()
+            encoder.zero_grad()
+            generator.zero_grad()
+            discriminator.zero_grad()
 
-                hidden, encoder_attn = encoder(in_frames)
-                generated, generator_attn = generator(hidden)
+            hidden, encoder_attn = encoder(in_frames)
+            generated, generator_attn = generator(hidden)
 
-                generated_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), generated], dim=2)
+            generated_disc = torch.cat([in_frames[:, :, -1, :, :].unsqueeze(2), generated], dim=2)
 
-                out_gen, _, _ = discriminator(generated_disc)
-                err_G = out_gen.mean(0).view(1)
+            out_gen, _, _ = discriminator(generated_disc)
+            err_G = out_gen.mean(0).view(1)
 
-                loss_G = -err_G
-                loss_G.backward()
-                # err_G.backward(one)
-                generator_optim.step()
-                encoder_optim.step()
+            loss_G = -err_G
+            loss_G.backward()
+            # err_G.backward(one)
+            generator_optim.step()
+            encoder_optim.step()
 
             # print statistics
             if global_step % 10 == 9:
-                if global_step >= 50:
-                    print('[Step {0}] Loss: (D) {1} - (G) {2}'.format(
-                          global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
-                    tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
-                else:
-                    print('[Step {0}] Loss: (D) {1}'.format(
-                          global_step, round(loss_D.item(), 4)))
+                print('[Step {0}] Loss: (D) {1} - (G) {2}'.format(
+                      global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
+                tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
                 tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
 
             if global_step % 100 == 99:

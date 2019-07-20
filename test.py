@@ -10,9 +10,9 @@ from torchsummary import summary
 from torchvision.utils import save_image
 
 from utils.data_utils import FramesData
-from model.encoder import Encoder
-from model.generator import Generator
-from model.discriminator import Discrimator
+from model.encoder import Encoder, EncoderMoreConvs
+from model.generator import Generator, GeneratorMoreConvs
+from model.discriminator import Discrimator, DiscrimatorMoreConvs
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -110,10 +110,11 @@ if __name__ == '__main__':
     else:
         if train_config == 1:
             # basic
-            encoder = Encoder(frame_dim=64, init_temp=train_ins, hidden_dim=train_lat_dim, filters=[16, 32, 64, 128],
-                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
-            generator = Generator(frame_dim=64, temporal_target=train_outs, hidden_dim=train_lat_dim,
-                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
+            encoder = EncoderMoreConvs(frame_dim=64, init_temp=train_ins, hidden_dim=train_lat_dim,
+                                       filters=[16, 32, 64, 128], attention_at=16, target_temp=1, norm=None,
+                                       batchnorm=True, dropout=0.0, residual=True)
+            generator = GeneratorMoreConvs(frame_dim=64, temporal_target=train_outs, hidden_dim=train_lat_dim,
+                                           filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
             discriminator = Discrimator(frame_dim=64, init_temp=1 + train_outs, target_temp=1, feature_dim=1,
                                         filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
                                         dropout=0.0, residual=True)
