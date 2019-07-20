@@ -50,7 +50,7 @@ if __name__ == '__main__':
     train_indices = torch.load(os.path.join(args.logdir, 'data_idx.pth'))
     train_idx = train_indices['train_idx']
     val_idx = train_indices['val_idx']
-    test_idx = train_indices['test_idx']
+    test_idx = train_indices['test_idx'][10:]
 
     train_data = data.Subset(all_data, train_idx)
     val_data = data.Subset(all_data, val_idx)
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     train_loader = data.DataLoader(train_data, batch_size=1, shuffle=True)
     # val_loader = data.DataLoader(val_data, batch_size=32, shuffle=False, num_workers=args.workers)
-    test_loader = data.DataLoader(test_data, batch_size=1, shuffle=True)
+    test_loader = data.DataLoader(test_data, batch_size=1, shuffle=False)
 
     # training objectives
     disc_loss_fun = nn.BCEWithLogitsLoss()  # true-fake loss for discriminator
@@ -168,9 +168,9 @@ if __name__ == '__main__':
     discriminator.train(False)
 
     # print model summaries
-    summary(encoder, input_size=(3, train_ins, 64, 64))
-    summary(generator, input_size=(train_lat_dim,))
-    summary(discriminator, input_size=(3, 1+train_outs, 64, 64))
+    # summary(encoder, input_size=(3, train_ins, 64, 64))
+    # summary(generator, input_size=(train_lat_dim,))
+    # summary(discriminator, input_size=(3, 1+train_outs, 64, 64))
 
     nims = 10
 
@@ -200,7 +200,22 @@ if __name__ == '__main__':
 
         with torch.no_grad():
             # forward
-            hidden, _ = encoder(in_frames)
+            hidden, enc_attn = encoder(in_frames)
+            if nims==7:
+                orig_x = 8
+                orig_y = 40
+                orig_t = 3
+                attn_map = enc_attn[0,orig_t,orig_x//4,orig_y//4,:,:,:].unsqueeze(1).repeat(1,3,1,1)
+                attn_map = nn.functional.upsample(attn_map, scale_factor=4, mode='bicubic')
+                def norm_ip(img, min, max):
+                    img.clamp_(min=min, max=max)
+                    img.add_(-min).div_(max - min + 1e-5)
+                norm_ip(attn_map, float(attn_map.min()), float(attn_map.max()))
+                sel_map = attn_map*in_frames.squeeze().permute(1, 0, 2, 3)
+                sel_map[orig_t,0,orig_x,orig_y] = 1
+                save_image(sel_map,
+                           filename=os.path.join(args.logdir, 'test'+str(nims)+'_attn.png'),
+                           nrow=train_ins)
             generated, _ = generator(hidden)
 
             out_frames_disc = torch.cat([in_frames, out_frames], dim=2).squeeze().permute(1, 0, 2, 3)
