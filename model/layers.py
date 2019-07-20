@@ -312,18 +312,20 @@ class DoubleConvBlock3D(nn.Module):
                  norm=nn.utils.weight_norm, activation_fun=None):
         super(DoubleConvBlock3D, self).__init__()
 
-        self.conv1 = NormConv3D(c_in=c_in, c_out=c_in,
-                                activation_fun=activation_fun,
-                                batchnorm=batchnorm,
-                                bias=bias,
-                                norm=norm,
-                                down_spatial=False, down_temporal=False)
-        self.conv2 = NormConv3D(c_in=c_in, c_out=c_out,
-                                activation_fun=activation_fun,
-                                batchnorm=batchnorm,
-                                bias=bias,
-                                norm=norm,
-                                down_spatial=down_spatial, down_temporal=down_temporal)
+        if down_spatial and down_temporal:
+            stride = (2, 2, 2)
+        elif down_spatial and not down_temporal:
+            stride = (1, 2, 2)
+        elif not down_spatial and down_temporal:
+            stride = (2, 1, 1)
+        else:
+            stride = (1, 1, 1)
+
+        # strided 3x3 convolutions
+        self.conv1 = NormConvND(nn.Conv3d, c_in, c_in, 3, 1,
+                                bias, nn.BatchNorm3d(c_in) if batchnorm else None, norm, activation_fun, 1)
+        self.conv2 = NormConvND(nn.Conv3d, c_in, c_out, 3, stride,
+                                bias, nn.BatchNorm3d(c_out) if batchnorm else None, norm, activation_fun, 1)
 
     def forward(self, input):
         x = self.conv2(self.conv1(input))
@@ -339,18 +341,23 @@ class ResidualDoubleConvBlock3D(nn.Module):
                  norm=nn.utils.weight_norm, activation_fun=None):
         super(ResidualDoubleConvBlock3D, self).__init__()
 
-        self.conv1 = NormConv3D(c_in=c_in, c_out=c_in,
-                                activation_fun=activation_fun,
-                                batchnorm=batchnorm,
-                                bias=bias,
-                                norm=norm,
-                                down_spatial=False, down_temporal=False)
-        self.conv2 = NormConv3D(c_in=c_in, c_out=c_out,
-                                activation_fun=activation_fun,
-                                batchnorm=batchnorm,
-                                bias=bias,
-                                norm=norm,
-                                down_spatial=down_spatial, down_temporal=down_temporal)
+        self.down_spatial = down_spatial
+        self.down_temporal = down_temporal
+
+        if down_spatial and down_temporal:
+            stride = (2, 2, 2)
+        elif down_spatial and not down_temporal:
+            stride = (1, 2, 2)
+        elif not down_spatial and down_temporal:
+            stride = (2, 1, 1)
+        else:
+            stride = (1, 1, 1)
+
+        # strided 3x3 convolutions
+        self.conv1 = NormConvND(nn.Conv3d, c_in, c_in, 3, 1,
+                                bias, nn.BatchNorm3d(c_in) if batchnorm else None, norm, activation_fun, 1)
+        self.conv2 = NormConvND(nn.Conv3d, c_in, c_out, 3, stride,
+                                bias, nn.BatchNorm3d(c_out) if batchnorm else None, norm, activation_fun, 1)
 
         # residual pass 1x1 convolution to match filter number
         self.layer_res = NormConvND(nn.Conv3d, c_in, c_out, 1, 1,
@@ -368,7 +375,8 @@ class ResidualDoubleConvBlock3D(nn.Module):
         else:
             out_size = in_shape[2:]
 
-        x = self.conv2(self.conv1(input)) + self.layer_res(F.interpolate(input, out_size))
+        x = self.conv2(self.conv1(input))
+        x += self.layer_res(F.interpolate(input, out_size))
         return x
 
 

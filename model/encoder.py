@@ -106,7 +106,7 @@ class EncoderMoreConvs(nn.Module):
 
         temps = [True if np.log2(i) > int(np.log2(self.target_temp))+1 else False for i in range(init_temp, 0, -1)]
         temps = [False for i in range(self.depth - len(temps))] + temps[::-1]
-        print(temps)
+
         self.linear = layers.NormLinear(c_in=self.target_temp * 4 * 4 * self.filters[-1], c_out=hidden_dim,
                                         norm=norm, bias=True, batchnorm=False)
 
@@ -115,20 +115,20 @@ class EncoderMoreConvs(nn.Module):
 
         for i in range(self.depth):
             if residual:
-                self.down_stack.append(layers.ResidualDoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i],
+                self.down_stack.append(layers.ResidualDoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i+1],
                                                                         activation_fun=nn.ReLU(),
                                                                         batchnorm=batchnorm if i > 0 else False,
                                                                         bias=False,
                                                                         norm=norm,
-                                                                        down_spatial=False, down_temporal=False)
+                                                                        down_spatial=True, down_temporal=temps[i])
                                        )
             else:
-                self.down_stack.append(layers.DoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i],
+                self.down_stack.append(layers.DoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i+1],
                                                                 activation_fun=nn.ReLU(),
                                                                 batchnorm=batchnorm if i > 0 else False,
                                                                 bias=False,
                                                                 norm=norm,
-                                                                down_spatial=False, down_temporal=False)
+                                                                down_spatial=True, down_temporal=temps[i])
                                        )
             self.drop_stack.append(nn.Dropout3d(p=dropout))
 

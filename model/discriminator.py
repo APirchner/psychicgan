@@ -113,20 +113,20 @@ class DiscrimatorMoreConvs(nn.Module):
 
         for i in range(self.depth):
             if residual:
-                self.down_stack.append(layers.ResidualDoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i],
+                self.down_stack.append(layers.ResidualDoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i+1],
                                                                         activation_fun=nn.LeakyReLU(0.2),
                                                                         batchnorm=batchnorm if i > 0 else False,
                                                                         bias=False,
                                                                         norm=norm,
-                                                                        down_spatial=False, down_temporal=False)
+                                                                        down_spatial=True, down_temporal=temps[i])
                                        )
             else:
-                self.down_stack.append(layers.DoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i],
+                self.down_stack.append(layers.DoubleConvBlock3D(c_in=self.filters[i], c_out=self.filters[i+1],
                                                                 activation_fun=nn.LeakyReLU(0.2),
                                                                 batchnorm=batchnorm if i > 0 else False,
                                                                 bias=False,
                                                                 norm=norm,
-                                                                down_spatial=False, down_temporal=False)
+                                                                down_spatial=True, down_temporal=temps[i])
                                        )
             self.drop_stack.append(nn.Dropout3d(p=dropout))
 
