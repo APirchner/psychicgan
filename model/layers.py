@@ -182,6 +182,62 @@ class SelfAttentionND(nn.Module):
         return out, attn_out
 
 
+class DummySelfAttentionND(nn.Module):
+    """
+    N-dimensional dummy self attention layer. N is 2 or 3.
+    CAUTION: does not compute self attention, just has the same number of parameters
+             to mimic the effect of the parameter count of the self attention layer!
+    """
+
+    def __init__(self, dim, norm, c_in, bias=True):
+        """
+        :param dim: input dimension, either 2 or 3
+        :param norm: the kind of normalization for the convolutions, e.g. torch.utils.weight_norm
+        :param c_in: the input channels
+        """
+        super(DummySelfAttentionND, self).__init__()
+
+        assert dim == 2 or dim == 3
+
+        # channel reduction like in self-attention GAN paper
+        self.c_inter = c_in // 8
+        self.c_inter_value = c_in // 2
+
+        # trainable attention mix parameter
+        self.gamma = nn.Parameter(data=torch.zeros(1, dtype=torch.float32))
+
+        self.container = nn.ModuleDict({
+            'query_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
+                                     kernel_size=1, stride=1, bias=bias, norm=norm),
+            'key_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter,
+                                   kernel_size=1, stride=1, bias=bias, norm=norm),
+            'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter_value,
+                                     kernel_size=1, stride=1, bias=bias, norm=norm),
+            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=3 * self.c_inter_value, c_out=c_in,
+                                   kernel_size=1, stride=1, bias=bias, norm=norm),
+        })
+
+    def forward(self, input):
+        """
+        :param input: layer input
+        :return: tuple of layer output and attention mask
+        """
+        # get batch size to infer other dims
+        input_size = list(input.shape)
+
+        # split input and reduce channels [batch, c, (t), h, w]
+        query = self.container['query_conv'](input)
+        key = self.container['key_conv'](input)
+        value = self.container['value_conv'](input)
+
+        res = torch.cat((query, key, value), dim=-1)
+
+        res = self.container['att_conv'](res)
+
+        out = input + self.gamma * res
+        return out, None
+
+
 class NormConv3D(nn.Module):
     """
     3D convenience wrapper for ND conv with 3x3x3 kernel
@@ -421,6 +477,20 @@ class SelfAttention3D(nn.Module):
     def __init__(self, norm, c_in):
         super(SelfAttention3D, self).__init__()
         self.layer = SelfAttentionND(3, norm, c_in)
+
+    def forward(self, input):
+        x, attention_mask = self.layer(input)
+        return x, attention_mask
+
+
+class DummySelfAttention3D(nn.Module):
+    """
+    3D convenience wrapper for ND self-attention
+    """
+
+    def __init__(self, norm, c_in):
+        super(DummySelfAttention3D, self).__init__()
+        self.layer = DummySelfAttentionND(3, norm, c_in)
 
     def forward(self, input):
         x, attention_mask = self.layer(input)
