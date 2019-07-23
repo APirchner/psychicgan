@@ -17,7 +17,7 @@ class Generator(nn.Module):
         assert len(filters) == self.depth
 
         # get position of attention layer
-        self.att_idx = int(np.log2(attention_at)) - 2 if attention_at is not None else None
+        self.att_idx = int(np.log2(attention_at)) - 2 if attention_at is not None else int(np.log2(32)) - 2
 
         self.filters = filters
         # last layer outputs 3 channels for RGB
@@ -73,7 +73,7 @@ class GeneratorMoreConvs(nn.Module):
         assert len(filters) == self.depth
 
         # get position of attention layer
-        self.att_idx = int(np.log2(attention_at)) - 2 if attention_at is not None else None
+        self.att_idx = int(np.log2(attention_at)) - 2 if attention_at is not None else int(np.log2(32)) - 2
 
         self.filters = filters
         # last layer outputs 3 channels for RGB
@@ -99,7 +99,7 @@ class GeneratorMoreConvs(nn.Module):
                 activation_fun=nn.LeakyReLU(0.2))
             )
             self.up_stack.append(layers.ResidualNormConv3D(
-                c_in=self.filters[i+1], c_out=self.filters[i+1],
+                c_in=self.filters[i + 1], c_out=self.filters[i + 1],
                 activation_fun=nn.LeakyReLU(0.2) if i < self.depth - 1 else nn.Tanh(),
                 batchnorm=batchnorm,
                 bias=False,
@@ -109,7 +109,7 @@ class GeneratorMoreConvs(nn.Module):
         self.up_stack = nn.ModuleList(self.up_stack)
 
         self.attention = layers.SelfAttention3D(norm, c_in=self.filters[self.att_idx]) \
-            if attention_at is not None else None
+            if attention_at is not None else layers.DummySelfAttention3D(norm, c_in=self.filters[self.att_idx])
 
     def forward(self, input):
         attn = None
@@ -117,7 +117,7 @@ class GeneratorMoreConvs(nn.Module):
         x = x.reshape((-1, self.filters[0], 1, 4, 4))
         for i in range(len(self.up_stack)):
             # include attention layer at chosen depth (multiply by 2 because each block has 2 convs)
-            if self.att_idx is not None and i == 2*self.att_idx+1:
+            if i == 2 * self.att_idx:
                 x, attn = self.attention(x)
             x = self.up_stack[i](x)
         return x, attn

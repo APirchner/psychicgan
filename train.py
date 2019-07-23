@@ -62,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--workers', type=int, default=4, help='The number of threads for data pre-fetching')
     parser.add_argument('-b', '--batch_size', type=int, default=32, help='The batch size')
     parser.add_argument('-g', '--lr_generator', type=float, default=1e-4, help='The generator learning rate')
-    parser.add_argument('-', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
+    parser.add_argument('-m', '--lr_encoder', type=float, default=1e-4, help='The encoder learning rate')
     parser.add_argument('-n', '--lr_discriminator', type=float, default=1e-4, help='The discriminator learning rate')
     # CUDA
     parser.add_argument('-c', '--disable-cuda', action='store_true', help='Disable CUDA')
@@ -154,7 +154,7 @@ if __name__ == '__main__':
                                        norm=None, batchnorm=True, dropout=0.0, residual=True)
             generator = GeneratorMoreConvs(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
                                            filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
-            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+            discriminator = Discrimator(frame_dim=64, init_temp=1 + args.outs, target_temp=1, feature_dim=1,
                                         filters=[16, 32, 64, 128], attention_at=16, norm=None, batchnorm=False,
                                         dropout=0.0, residual=True)
         elif args.config == 2:
@@ -163,7 +163,7 @@ if __name__ == '__main__':
                               attention_at=None, norm=None, batchnorm=True, dropout=0.0, residual=True)
             generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
                                   filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
-            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+            discriminator = Discrimator(frame_dim=64, init_temp=1 + args.outs, target_temp=1, feature_dim=1,
                                         filters=[16, 32, 64, 128], attention_at=None, norm=None, batchnorm=False,
                                         dropout=0.0, residual=True)
         elif args.config == 3:
@@ -173,27 +173,31 @@ if __name__ == '__main__':
                                        dropout=0.0, residual=True)
             generator = GeneratorMoreConvs(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
                                            filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
-            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
+            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=1 + args.outs, target_temp=1, feature_dim=1,
                                                  filters=[32, 64, 128, 256], attention_at=16, norm=None,
                                                  batchnorm=False, dropout=0.0, residual=True)
         elif args.config == 4:
             # basic + more filters enc/disc + attn in gen
-            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
-                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
-            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=16, norm=None, batchnorm=True)
-            discriminator = Discrimator(frame_dim=64, init_temp=1+args.outs, target_temp=1, feature_dim=1,
-                                        filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=False,
-                                        dropout=0.0, residual=True)
+            encoder = EncoderMoreConvs(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim,
+                                       filters=[32, 64, 128, 256],
+                                       attention_at=None, norm=None, batchnorm=True, dropout=0.0, residual=True)
+            generator = GeneratorMoreConvs(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                           filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
+            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=1 + args.outs, target_temp=1, feature_dim=1,
+                                                 filters=[32, 64, 128, 256], attention_at=None, norm=None,
+                                                 batchnorm=False,
+                                                 dropout=0.0, residual=True)
         elif args.config == 5:
             # basic + different capacities + spectral norm
-            encoder = Encoder(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim, filters=[32, 64, 128, 256],
-                              attention_at=None, norm=nn.utils.spectral_norm, residual=True)
-            generator = Generator(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
-                                  filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
-            discriminator = Discrimator(frame_dim=64, init_temp=args.outs, feature_dim=1,
-                                        filters=[16, 32, 64, 128],
-                                        attention_at=16, norm=nn.utils.spectral_norm, batchnorm=False, residual=True)
+            encoder = EncoderMoreConvs(frame_dim=64, init_temp=args.ins, hidden_dim=args.latent_dim,
+                                       filters=[32, 64, 128, 256],
+                                       attention_at=None, norm=nn.utils.spectral_norm, residual=True)
+            generator = GeneratorMoreConvs(frame_dim=64, temporal_target=args.outs, hidden_dim=args.latent_dim,
+                                           filters=[256, 128, 64, 32], attention_at=32, norm=nn.utils.spectral_norm)
+            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=args.outs, feature_dim=1,
+                                                 filters=[16, 32, 64, 128],
+                                                 attention_at=16, norm=nn.utils.spectral_norm, batchnorm=False,
+                                                 residual=True)
 
     encoder = encoder.to(device)
     generator = generator.to(device)
@@ -206,7 +210,7 @@ if __name__ == '__main__':
     # print model summaries
     summary(encoder, input_size=(3, args.ins, 64, 64))
     summary(generator, input_size=(args.latent_dim,))
-    summary(discriminator, input_size=(3, 1+args.outs, 64, 64))
+    summary(discriminator, input_size=(3, 1 + args.outs, 64, 64))
 
     # tensorboard log writer
     tb_writer = SummaryWriter(log_dir=args.logdir)
@@ -308,14 +312,14 @@ if __name__ == '__main__':
             # print statistics
             if global_step % 10 == 9:
                 print('[Step {0}] Loss: (D) {1} - (G) {2}'.format(
-                      global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
+                    global_step, round(loss_D.item(), 4), round(loss_G.item(), 4)))
                 tb_writer.add_scalar('G_loss', loss_G.item(), global_step=global_step)
                 tb_writer.add_scalar('D_loss', loss_D.item(), global_step=global_step)
 
             if global_step % 100 == 99:
                 # log generated and real images
-                gen_imgs = torchvision.utils.make_grid(((generated[:64, :, :, :, :]+1)/2).squeeze())
-                real_imgs = torchvision.utils.make_grid(((out_frames[:64, :, :, :, :]+1)/2).squeeze())
+                gen_imgs = torchvision.utils.make_grid(((generated[:64, :, :, :, :] + 1) / 2).squeeze())
+                real_imgs = torchvision.utils.make_grid(((out_frames[:64, :, :, :, :] + 1) / 2).squeeze())
                 tb_writer.add_image('G_imgs', gen_imgs, global_step=global_step)
                 tb_writer.add_image('R_imgs', real_imgs, global_step=global_step)
 
@@ -349,7 +353,7 @@ if __name__ == '__main__':
 
                         loss_D = err_gen - err_real
                         # calc_gradient_penalty(discriminator, out_frames_disc, generated_disc, 10, device)
-                        val_loss += loss_D/len(val_data)
+                        val_loss += loss_D / len(val_data)
                 print('[Step {0}] Val-loss: (D) {1}'.format(
                     global_step, round(val_loss.item(), 4)))
                 tb_writer.add_scalar('val_loss', val_loss.item(), global_step=global_step)
@@ -458,14 +462,14 @@ if __name__ == '__main__':
     torch.save({'train_idx': train_idx, 'val_idx': val_idx, 'test_idx': test_idx},
                os.path.join(args.logdir, 'data_idx.pth'))
 
-        # val_loss = 0.0
-        # for inval, outval in val_loader:
-        #     # get the validation inputs and outputs
-        #     inval, outval = inval.to(device), outval.to(device)
-        #
-        #     # forward
-        #     hidval, encval_attn = encoder(inval)
-        #     genval, genval_attn = generator(hidval)
-        #     val_loss += loss_fun(genval, outval).item() / len(val_loader)
-        #
-        # print('[Epoch {0}] Val-Loss: {1}'.format(epoch, val_loss))
+    # val_loss = 0.0
+    # for inval, outval in val_loader:
+    #     # get the validation inputs and outputs
+    #     inval, outval = inval.to(device), outval.to(device)
+    #
+    #     # forward
+    #     hidval, encval_attn = encoder(inval)
+    #     genval, genval_attn = generator(hidval)
+    #     val_loss += loss_fun(genval, outval).item() / len(val_loader)
+    #
+    # print('[Epoch {0}] Val-Loss: {1}'.format(epoch, val_loss))

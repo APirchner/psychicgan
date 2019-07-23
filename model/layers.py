@@ -213,7 +213,7 @@ class DummySelfAttentionND(nn.Module):
                                    kernel_size=1, stride=1, bias=bias, norm=norm),
             'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter_value,
                                      kernel_size=1, stride=1, bias=bias, norm=norm),
-            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=3 * self.c_inter_value, c_out=c_in,
+            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=2 * self.c_inter + self.c_inter_value, c_out=c_in,
                                    kernel_size=1, stride=1, bias=bias, norm=norm),
         })
 
@@ -230,12 +230,12 @@ class DummySelfAttentionND(nn.Module):
         key = self.container['key_conv'](input)
         value = self.container['value_conv'](input)
 
-        res = torch.cat((query, key, value), dim=-1)
+        res = torch.cat((query, key, value), dim=1)
 
         res = self.container['att_conv'](res)
 
         out = input + self.gamma * res
-        return out, None
+        return out, res
 
 
 class NormConv3D(nn.Module):
