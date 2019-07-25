@@ -8,6 +8,7 @@ import torch.nn as nn
 
 from torchsummary import summary
 from torchvision.utils import save_image
+from torchvision import transforms
 
 from utils.data_utils import FramesData
 from model.encoder import Encoder, EncoderMoreConvs
@@ -37,11 +38,12 @@ if __name__ == '__main__':
     train_config = train_args['config']
     train_wgan = train_args['wasserstein']
 
-    device = None
-    if not args.disable_cuda and torch.cuda.is_available():
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
+    # device = None
+    # if not args.disable_cuda and torch.cuda.is_available():
+    #     device = torch.device('cuda')
+    # else:
+    #     device = torch.device('cpu')
+    device = torch.device('cpu')
 
     print(device)
 
@@ -50,7 +52,7 @@ if __name__ == '__main__':
     train_indices = torch.load(os.path.join(args.logdir, 'data_idx.pth'))
     train_idx = train_indices['train_idx']
     val_idx = train_indices['val_idx']
-    test_idx = train_indices['test_idx'][10:]
+    test_idx = train_indices['test_idx']
 
     train_data = data.Subset(all_data, train_idx)
     val_data = data.Subset(all_data, val_idx)
@@ -129,13 +131,14 @@ if __name__ == '__main__':
                                         dropout=0.0, residual=True)
         elif train_config == 3:
             # basic + more filters enc/disc
-            encoder = Encoder(frame_dim=64, init_temp=train_ins, hidden_dim=train_lat_dim, filters=[32, 64, 128, 256],
-                              attention_at=16, norm=None, batchnorm=True, dropout=0.0, residual=True)
-            generator = Generator(frame_dim=64, temporal_target=train_outs, hidden_dim=train_lat_dim,
-                                  filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
-            discriminator = Discrimator(frame_dim=64, init_temp=1 + train_outs, target_temp=1, feature_dim=1,
-                                        filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=False,
-                                        dropout=0.0, residual=True)
+            encoder = EncoderMoreConvs(frame_dim=64, init_temp=train_ins, hidden_dim=train_lat_dim, target_temp = 1,
+                                       filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=True,
+                                       dropout=0.0, residual=True)
+            generator = GeneratorMoreConvs(frame_dim=64, temporal_target=train_outs, hidden_dim=train_lat_dim,
+                                           filters=[256, 128, 64, 32], attention_at=None, norm=None, batchnorm=True)
+            discriminator = DiscrimatorMoreConvs(frame_dim=64, init_temp=1 + train_outs, target_temp=1, feature_dim=1,
+                                                 filters=[32, 64, 128, 256], attention_at=16, norm=None, batchnorm=False,
+                                                 dropout=0.0, residual=True)
         elif train_config == 4:
             # basic + more filters enc/disc + spectral norm
             encoder = Encoder(frame_dim=64, init_temp=train_ins, hidden_dim=train_lat_dim, filters=[32, 64, 128, 256],
@@ -192,8 +195,14 @@ if __name__ == '__main__':
         if nims == 0:
             break
 
-    nims = 10
+    # nims = 10
+    to_image = transforms.ToPILImage()
+    real_data_path = os.path.join(args.dir,'real_data')
+    gen_data_path = os.path.join(args.dir,'gen_data')
+    os.mkdir(real_data_path)
+    os.mkdir(gen_data_path)
 
+    k = 0
     for in_frames, out_frames in test_loader:
         in_frames = in_frames.to(device)
         out_frames = out_frames.to(device)
@@ -201,28 +210,31 @@ if __name__ == '__main__':
         with torch.no_grad():
             # forward
             hidden, enc_attn = encoder(in_frames)
-            if nims==7:
-                orig_x = 8
-                orig_y = 40
-                orig_t = 3
-                attn_map = enc_attn[0,orig_t,orig_x//4,orig_y//4,:,:,:].unsqueeze(1).repeat(1,3,1,1)
-                attn_map = nn.functional.upsample(attn_map, scale_factor=4, mode='bicubic')
-                def norm_ip(img, min, max):
-                    img.clamp_(min=min, max=max)
-                    img.add_(-min).div_(max - min + 1e-5)
-                norm_ip(attn_map, float(attn_map.min()), float(attn_map.max()))
-                sel_map = attn_map*in_frames.squeeze().permute(1, 0, 2, 3)
-                sel_map[orig_t,0,orig_x,orig_y] = 1
-                save_image(sel_map,
-                           filename=os.path.join(args.logdir, 'test'+str(nims)+'_attn.png'),
-                           nrow=train_ins)
+            # if nims==7:
+            #    orig_x = 8
+            #    orig_y = 40
+            #    orig_t = 3
+            #    attn_map = enc_attn[0,orig_t,orig_x//4,orig_y//4,:,:,:].unsqueeze(1).repeat(1,3,1,1)
+            #    attn_map = nn.functional.upsample(attn_map, scale_factor=4, mode='bicubic')
+            #    def norm_ip(img, min, max):
+            #        img.clamp_(min=min, max=max)
+            #        img.add_(-min).div_(max - min + 1e-5)
+            #    norm_ip(attn_map, float(attn_map.min()), float(attn_map.max()))
+            #    sel_map = attn_map*in_frames.squeeze().permute(1, 0, 2, 3)
+            #    sel_map[orig_t,0,orig_x,orig_y] = 1
+            #    save_image(sel_map,
+            #               filename=os.path.join(args.logdir, 'test'+str(nims)+'_attn.png'),
+            #               nrow=train_ins)
             generated, _ = generator(hidden)
 
-            out_frames_disc = torch.cat([in_frames, out_frames], dim=2).squeeze().permute(1, 0, 2, 3)
-            generated_disc = torch.cat([in_frames, generated], dim=2).squeeze().permute(1, 0, 2, 3)
+            # out_frames_disc = torch.cat([in_frames, out_frames], dim=2).squeeze().permute(1, 0, 2, 3)
+            # generated_disc = torch.cat([in_frames, generated], dim=2).squeeze().permute(1, 0, 2, 3)
 
-        save_image(torch.cat([(out_frames_disc+1)/2, (generated_disc+1)/2], dim=0), filename=os.path.join(args.logdir, 'test'+str(nims)+'.png'),
-                   nrow=train_ins+train_outs)
-        nims -= 1
-        if nims == 0:
-            break
+        to_image(((out_frames+1)/2).squeeze()).save(os.path.join(real_data_path,'img%d.png' % k))
+        to_image(((generated+1)/2).squeeze()).save(os.path.join(gen_data_path,'img%d.png' % k))
+        k += 1
+        # save_image(torch.cat([(out_frames_disc+1)/2, (generated_disc+1)/2], dim=0), filename=os.path.join(args.logdir, 'test'+str(nims)+'.png'),
+        #            nrow=train_ins+train_outs)
+        # nims -= 1
+        # if nims == 0:
+        #     break
