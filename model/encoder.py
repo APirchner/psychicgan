@@ -5,6 +5,10 @@ import model.layers as layers
 
 
 class Encoder(nn.Module):
+    """
+    Basic generator - one conv per block
+    """
+
     def __init__(self, frame_dim=64, init_temp=3, target_temp=2, hidden_dim=128,
                  filters=(64, 128, 256, 512), attention_at=8,
                  norm=nn.utils.weight_norm, batchnorm=True, dropout=0.25, residual=True):
@@ -79,6 +83,10 @@ class Encoder(nn.Module):
 
 
 class EncoderMoreConvs(nn.Module):
+    """
+    Deep encoder - two convs per block
+    """
+
     def __init__(self, frame_dim=64, init_temp=3, target_temp=2, hidden_dim=128,
                  filters=(64, 128, 256, 512), attention_at=8,
                  norm=nn.utils.weight_norm, batchnorm=True, dropout=0.25, residual=True):

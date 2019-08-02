@@ -4,6 +4,10 @@ import model.layers as layers
 
 
 class Generator(nn.Module):
+    """
+    Basic generator - one conv per block
+    """
+
     def __init__(self, frame_dim=64, temporal_target=3, hidden_dim=128, filters=(512, 256, 128, 64), attention_at=8,
                  norm=nn.utils.weight_norm, batchnorm=True):
         super(Generator, self).__init__()
@@ -60,6 +64,10 @@ class Generator(nn.Module):
 
 
 class GeneratorMoreConvs(nn.Module):
+    """
+    Deep generator - two convs per block
+    """
+
     def __init__(self, frame_dim=64, temporal_target=3, hidden_dim=128, filters=(512, 256, 128, 64), attention_at=8,
                  norm=nn.utils.weight_norm, batchnorm=True):
         super(GeneratorMoreConvs, self).__init__()

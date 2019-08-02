@@ -20,6 +20,11 @@ from model.discriminator import Discrimator, DiscrimatorMoreConvs
 
 
 def weight_init(net):
+    """
+    Initializes a given neural net with the Xavier normal dist.
+    :param net:  the network to initialize
+    :return: None
+    """
     classname = net.__class__.__name__
     if classname.find('Conv3d') != -1:
         nn.init.xavier_normal_(net.weight.data)
@@ -28,6 +33,15 @@ def weight_init(net):
 
 
 def calc_gradient_penalty(netD, real_data, fake_data, l, device):
+    """
+    Calculates the gradient penalty defined in "Improved Training of Wasserstein GANs".
+    :param netD: the discriminator
+    :param real_data: batch of real frames
+    :param fake_data: batch of generated frames
+    :param l: penalty strength lambda
+    :param device: cuda or cpu
+    :return: the penalty value
+    """
     batch_size = real_data.shape[0]
     alpha = torch.rand(batch_size, 1)
     alpha = alpha.to(device)
@@ -46,6 +60,8 @@ def calc_gradient_penalty(netD, real_data, fake_data, l, device):
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * l
     return gradient_penalty
 
+
+#### MAIN ####
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -85,8 +101,8 @@ if __name__ == '__main__':
     print(device)
 
     all_data = FramesData(args.ins, args.outs, args.dir)
-    # lengths = [int(len(all_data) * 0.8), len(all_data) - int(len(all_data) * 0.8)]
 
+    # train/evaluation/test split
     shuffled_idx = list(range(len(all_data)))
     np.random.shuffle(shuffled_idx)
     train_idx = shuffled_idx[:80000]
@@ -103,6 +119,7 @@ if __name__ == '__main__':
     disc_loss_fun = nn.BCEWithLogitsLoss()  # true-fake loss for discriminator
     gen_loss_fun = nn.MSELoss()  # feature matching loss for generator/encoder
 
+    # architecture configs for FM ang WGAN
     if not args.wasserstein:
         if args.config == 1:
             # basic
@@ -199,10 +216,10 @@ if __name__ == '__main__':
                                                  attention_at=16, norm=nn.utils.spectral_norm, batchnorm=False,
                                                  residual=True)
 
+    # network setup and weight init
     encoder = encoder.to(device)
     generator = generator.to(device)
     discriminator = discriminator.to(device)
-
     encoder.apply(weight_init)
     generator.apply(weight_init)
     discriminator.apply(weight_init)
@@ -216,20 +233,10 @@ if __name__ == '__main__':
     tb_writer = SummaryWriter(log_dir=args.logdir)
 
     if args.wasserstein:
-        # WASSERSTEIN GAN
-
-        # in WGAN, moment-based optimizers don't appear to work as well -> see WGAN paper
-        # encoder_optim = optim.RMSprop(encoder.parameters(), lr=args.lr_encoder)
-        # generator_optim = optim.RMSprop(generator.parameters(), lr=args.lr_generator)
-        # discriminator_optim = optim.RMSprop(discriminator.parameters(), lr=args.lr_discriminator)
-        # in improved WGAN they use Adam
+        # WGAN training loop
         encoder_optim = optim.Adam(encoder.parameters(), lr=args.lr_encoder, betas=(0., 0.9))
         generator_optim = optim.Adam(generator.parameters(), lr=args.lr_generator, betas=(0., 0.9))
         discriminator_optim = optim.Adam(discriminator.parameters(), lr=args.lr_discriminator, betas=(0., 0.9))
-
-        # encoder_sched = optim.lr_scheduler.ExponentialLR(encoder_optim, gamma=0.99)
-        # generator_sched = optim.lr_scheduler.ExponentialLR(generator_optim, gamma=0.99)
-        # discriminator_sched = optim.lr_scheduler.ExponentialLR(discriminator_optim, gamma=0.99)
 
         one = torch.FloatTensor([1]).to(device)
         m_one = -1 * one
@@ -276,9 +283,6 @@ if __name__ == '__main__':
                 loss_D = err_gen - err_real + calc_gradient_penalty(discriminator, out_frames_disc, generated_disc, 10,
                                                                     device)
                 loss_D.backward()
-                # err_real.backward(m_one)
-                # err_gen.backward(one)
-                # err_D = err_real + err_gen
                 discriminator_optim.step()
 
             # GENERATOR/ENCODER TRAINING
@@ -305,7 +309,6 @@ if __name__ == '__main__':
 
             loss_G = -err_G
             loss_G.backward()
-            # err_G.backward(one)
             generator_optim.step()
             encoder_optim.step()
 
@@ -366,6 +369,7 @@ if __name__ == '__main__':
                 discriminator.train(True)
 
     else:
+        # feature matching training loop
         encoder_optim = optim.Adam(encoder.parameters(), lr=args.lr_encoder, betas=(0.0, 0.9))
         generator_optim = optim.Adam(generator.parameters(), lr=args.lr_generator, betas=(0.0, 0.9))
         discriminator_optim = optim.Adam(discriminator.parameters(), lr=args.lr_discriminator, betas=(0.0, 0.9))
@@ -461,15 +465,3 @@ if __name__ == '__main__':
     torch.save(discriminator.state_dict(), os.path.join(args.logdir, 'discriminator.pth'))
     torch.save({'train_idx': train_idx, 'val_idx': val_idx, 'test_idx': test_idx},
                os.path.join(args.logdir, 'data_idx.pth'))
-
-    # val_loss = 0.0
-    # for inval, outval in val_loader:
-    #     # get the validation inputs and outputs
-    #     inval, outval = inval.to(device), outval.to(device)
-    #
-    #     # forward
-    #     hidval, encval_attn = encoder(inval)
-    #     genval, genval_attn = generator(hidval)
-    #     val_loss += loss_fun(genval, outval).item() / len(val_loader)
-    #
-    # print('[Epoch {0}] Val-Loss: {1}'.format(epoch, val_loss))

@@ -146,10 +146,6 @@ class SelfAttentionND(nn.Module):
         })
 
     def forward(self, input):
-        """
-        :param input: layer input
-        :return: tuple of layer output and attention mask
-        """
         # get batch size to infer other dims
         input_size = list(input.shape)
 
@@ -213,7 +209,8 @@ class DummySelfAttentionND(nn.Module):
                                    kernel_size=1, stride=1, bias=bias, norm=norm),
             'value_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=c_in, c_out=self.c_inter_value,
                                      kernel_size=1, stride=1, bias=bias, norm=norm),
-            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d, c_in=2 * self.c_inter + self.c_inter_value, c_out=c_in,
+            'att_conv': NormConvND(conv=nn.Conv3d if dim == 3 else nn.Conv2d,
+                                   c_in=2 * self.c_inter + self.c_inter_value, c_out=c_in,
                                    kernel_size=1, stride=1, bias=bias, norm=norm),
         })
 

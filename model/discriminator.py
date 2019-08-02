@@ -6,6 +6,10 @@ from model import layers
 
 
 class Discrimator(nn.Module):
+    """
+    Basic discriminator - one conv per block
+    """
+
     def __init__(self, frame_dim=64, init_temp=3, target_temp=2, feature_dim=128,
                  filters=(64, 128, 256, 512), attention_at=8,
                  norm=nn.utils.weight_norm, batchnorm=True, dropout=0.4, residual=True):
@@ -79,6 +83,10 @@ class Discrimator(nn.Module):
 
 
 class DiscrimatorMoreConvs(nn.Module):
+    '''
+    Deep discriminator - two convs per block
+    '''
+
     def __init__(self, frame_dim=64, init_temp=3, target_temp=2, feature_dim=128,
                  filters=(64, 128, 256, 512), attention_at=8,
                  norm=nn.utils.weight_norm, batchnorm=True, dropout=0.4, residual=True):
@@ -93,7 +101,8 @@ class DiscrimatorMoreConvs(nn.Module):
         assert len(filters) == self.depth
 
         # get position of attention layer
-        self.att_idx = self.depth - int(np.log2(attention_at)) + 2 if attention_at is not None else self.depth - int(np.log2(32)) + 2
+        self.att_idx = self.depth - int(np.log2(attention_at)) + 2 if attention_at is not None else self.depth - int(
+            np.log2(32)) + 2
 
         self.target_temp = target_temp
 
